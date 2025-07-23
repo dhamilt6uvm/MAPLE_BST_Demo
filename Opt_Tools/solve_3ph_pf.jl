@@ -10,6 +10,7 @@ using Ipopt
 using LinearAlgebra
 using CSV
 using DataFrames
+using Printf
 
 # Import Python modules
 pickle = pyimport("pickle")
@@ -208,9 +209,8 @@ plot!(title="Phase B",xformatter=:none,yformatter=:none,legend=:false,subplot=2)
 plot!(title="Phase C",xformatter=:none,yformatter=:none,legend=:false,subplot=3)
 display(vis_plt)
 
-# colorbar plot
+# colorbar plot - axis labels are cut off... 
 dummy_vals = reshape(range(Vmin, Vmax, length=100), :, 1)
-
 colorbar_plot = heatmap(
     dummy_vals,
     c=cgrad(:turbo),
@@ -219,11 +219,46 @@ colorbar_plot = heatmap(
     size=(150, 400),
     ticks=:native
 )
-
 display(colorbar_plot)
 
-# single phase plot
-
+# # single phase plot with colorbar - not currently working... :(
+# single_phase = "B"
+# show_single_phase = true
+# if show_single_phase
+#     # choose vars for specific phase
+#     if single_phase == "A"
+#         node_colors_sp = node_colors_a
+#     elseif single_phase == "B"
+#         Vmag = Vph_mag[2,:]
+#         # node_colors_sp = node_colors_b
+#     elseif single_phase == "C"
+#         node_colors_sp = node_colors_c
+#     else
+#         error("Invalid single phase selection: $single_phase")
+#     end
+#     # gather data to scatter
+#     x_coords_sp = Float64[]
+#     y_coords_sp = Float64[]
+#     # colors_sp = RGBA{Float64}[]
+#     for (nd_ind,Node) in enumerate(psm.Nodes)
+#         if occursin(single_phase,Node.phases)
+#             push!(x_coords_sp, Node.X_coord)
+#             push!(y_coords_sp, Node.Y_coord)
+#             # push!(colors_sp, node_colors_sp[nd_ind])
+#         end
+#     end
+#     # create plot
+#     vs_plt_sp = plot(layout=grid(1,1), size=(600,600))
+#     for (br_ind,Branch) in enumerate(psm.Branches)
+#         plot!([Branch.X_coord,Branch.X2_coord],[Branch.Y_coord,Branch.Y2_coord],color=:black)
+#     end
+#     scatter!(vs_plt_sp, x_coords_sp, y_coords_sp, 
+#         # color=Vmag, 
+#         markersize=3, legend=false, title="Phase $single_phase",
+#         xlabel="X Coordinate (m)", ylabel="Y Coordinate (m)",colorbar=true
+#     )
+#     # plot!(title="Phase $single_phase",xformatter=:none,yformatter=:none,legend=:false)
+# end
 
 # # cb_plt = heatmap(rand(2,2), clims=(Vmin,Vmax),  right_margin = 10Plots.mm, framestyle=:none, c=node_colormap, cbar=true, lims=(-1,0),colorbar_title = " \nVoltage Magnitude (pu)")
 # # display(cb_plt)
