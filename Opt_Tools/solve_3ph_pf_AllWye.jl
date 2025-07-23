@@ -6,7 +6,7 @@ using ColorTypes
 using Colors
 using JuMP
 using Ipopt
-# import HSL_jll
+import HSL_jll
 using LinearAlgebra
 using CSV
 using DataFrames
@@ -17,7 +17,7 @@ pushfirst!(pyimport("sys")."path", "")
 pyimport("GLM_Tools")
 
 # Load the .pkl file 
-substation_name = "Burton_Hill"
+substation_name = "Burton_Hill_AllWye"
 fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model.pkl"
 pkl_file = open(fname, "r")
 psm = pickle.load(pkl_file)
@@ -27,15 +27,6 @@ close(pkl_file)
 n_nodes = length(psm.Nodes)
 n_branches = length(psm.Branches)
 
-# find number of delta-connected loads (need to create additional variables for delta currents)
-n_loads_D = 0
-for Load in psm.Loads
-    if occursin("D", Load.phases)
-        global n_loads_D
-        n_loads_D = n_loads_D + 1
-    end
-end
-
 # Substation Voltage
 V0_mag = 1
 V0_ref = V0_mag*[1.0,exp(-im*2*pi/3),exp(im*2*pi/3)]
@@ -43,7 +34,7 @@ V0_ref = V0_mag*[1.0,exp(-im*2*pi/3),exp(im*2*pi/3)]
 # Model Setup
 model = Model(Ipopt.Optimizer)
 model = Model(Ipopt.Optimizer)
-linear_solver = "mumps"
+linear_solver = "ma57"
 if linear_solver in ["ma27","ma57","ma77","ma86","ma97"]
     set_attribute(model, "hsllib", HSL_jll.libhsl_path)
     set_attribute(model, "linear_solver", linear_solver)
@@ -54,12 +45,10 @@ else
 end
 
 # Variable Definitions
-@variable(model, Vph_real[ph=1:3,1:n_nodes], start=real(V0_ref[ph]*exp(-im*pi/6)))
-@variable(model, Vph_imag[ph=1:3,1:n_nodes], start=imag(V0_ref[ph]*exp(-im*pi/6)))
+@variable(model, Vph_real[ph=1:3,1:n_nodes], start=real(V0_ref[ph]))
+@variable(model, Vph_imag[ph=1:3,1:n_nodes], start=imag(V0_ref[ph]))
 @variable(model, Iph_real[1:3,1:n_branches], start=0)
 @variable(model, Iph_imag[1:3,1:n_branches], start=0)
-@variable(model, Iload_D_real[1:3,1:n_loads_D], start=0)
-@variable(model, Iload_D_imag[1:3,1:n_loads_D], start=0)
 
 set_start_value.(Vph_real[:,1], real(V0_ref))
 set_start_value.(Vph_imag[:,1], imag(V0_ref))
@@ -67,14 +56,13 @@ set_start_value.(Vph_imag[:,1], imag(V0_ref))
 # Complex Variable Expressions
 @expression(model, Vph, Vph_real.+im*Vph_imag)
 @expression(model, Iph, Iph_real.+im*Iph_imag)
-@expression(model, Iload_D, Iload_D_real.+im*Iload_D_imag)
 
 # Substation Voltage Constraint
 @constraint(model, Vph[:,1] .== V0_ref)
 
 # Power Flow Constraints
-pb_lhs = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
-pb_rhs = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
+pb_in = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
+pb_out = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
 for (br_ind,Branch) in enumerate(psm.Branches)
     # skip open branches
     if Branch.type == "switch" 
@@ -86,33 +74,20 @@ for (br_ind,Branch) in enumerate(psm.Branches)
     from_node_ind = Branch.from_node_ind+1
     to_node_ind = Branch.to_node_ind+1
     # "Ohm's law"
-    @constraint(model, Vph[:,from_node_ind] .== Branch.A_br*Vph[:,to_node_ind] + Branch.B_br*Iph[:,br_ind])
+    @constraint(model, Vph[:,from_node_ind] .== Vph[:,to_node_ind] + Branch.Z_pu_3ph*Iph[:,br_ind])
     # Add branch flows to power balance expressions
-    pb_lhs[:,to_node_ind] += diag(Vph[:,to_node_ind]*Iph[:,br_ind]')
-    pb_rhs[:,from_node_ind] += diag(Branch.A_br*Vph[:,to_node_ind]*Iph[:,br_ind]'*(Branch.D_br')+Branch.B_br*Iph[:,br_ind]*Iph[:,br_ind]'*(Branch.D_br'))
+    pb_in[:,to_node_ind] += diag(Vph[:,to_node_ind]*Iph[:,br_ind]')
+    pb_out[:,from_node_ind] += diag(Vph[:,to_node_ind]*Iph[:,br_ind]'+Branch.Z_pu_3ph*Iph[:,br_ind]*Iph[:,br_ind]')
 end
 
 
 # Power Injection Constraints
-t_ind = 5
-s_load_Y = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
-s_load_D = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
-gamma_D = [[1.0 -1.0 0.0];[0.0 1.0 -1.0];[-1.0 0.0 1.0]]
-delta_node_ind = 1
+t_ind = 10
+s_load = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
 for (ld_ind, Load) in enumerate(psm.Loads)
     if haskey(Load,"Sload")
         parent_node_ind = Load.parent_node_ind+1
-        if occursin("N", Load.phases)
-            s_load_Y[:,parent_node_ind] += Load.Sload[t_ind,:]
-        elseif occursin("D", Load.phases)
-            @constraint(model, diag(gamma_D*Vph[:,parent_node_ind]*Iload_D[:,delta_node_ind]') .== Load.Sload[t_ind,:])
-            # @constraint(model, diag(gamma_D*Vph[:,parent_node_ind]*Iload_D[:,delta_node_ind]') .== zeros(3,1))
-            s_load_D[:,parent_node_ind] += diag(Vph[:,parent_node_ind]*Iload_D[:,delta_node_ind]'*gamma_D)
-            global delta_node_ind
-            delta_node_ind = delta_node_ind + 1
-        else
-            throw(ArgumentError("Can't determine if Load $(Load.name) is wye or delta connected."))
-        end
+        s_load[:,parent_node_ind] += Load.Sload[t_ind,:]
     end
 end
 s_gen = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
@@ -134,10 +109,10 @@ for (sht_ind, Shunt) in enumerate(psm.Shunts)
             status[3] = 1
         end
         parent_node_ind = Shunt.parent_node_ind+1
-        s_load_Y[:,parent_node_ind] += status.*diag(Vph[:,parent_node_ind]*Vph[:,parent_node_ind]'*conj(Shunt.Ycap))
+        s_load[:,parent_node_ind] += status.*diag(Vph[:,parent_node_ind]*Vph[:,parent_node_ind]'*conj(Shunt.Ycap))
     end
 end
-@constraint(model, pb_rhs[:,2:end] - pb_lhs[:,2:end] .== s_gen[:,2:end]-s_load_Y[:,2:end]-s_load_D[:,2:end])
+@constraint(model, pb_out[:,2:end] - pb_in[:,2:end] .== s_gen[:,2:end]-s_load[:,2:end])
 
 # Objective
 # @objective(model, Min, sum(real(s_inj[:,1])))
@@ -237,5 +212,5 @@ plot!(title="Phase C",xformatter=:none,yformatter=:none,legend=:false,subplot=3)
 display(vis_plt)
 
 
-# cb_plt = heatmap(rand(2,2), clims=(Vmin,Vmax),  right_margin = 10Plots.mm, framestyle=:none, c=node_colormap, cbar=true, lims=(-1,0),colorbar_title = " \nVoltage Magnitude (pu)")
-# display(cb_plt)
+cb_plt = heatmap(rand(2,2), clims=(Vmin,Vmax),  right_margin = 10Plots.mm, framestyle=:none, c=node_colormap, cbar=true, lims=(-1,0),colorbar_title = " \nVoltage Magnitude (pu)")
+display(cb_plt)

@@ -137,7 +137,7 @@ if __name__ == "__main__":
                         load_value_P = 1000*(load_ami_snap[str(meter_num)].values[0])
                     fixed_pf = args.load_fixed_pf
                     load_value_Q = load_value_P*np.sign(fixed_pf)*np.sqrt(1/(fixed_pf**2)-1)
-                    load_value_str = f"{load_value_P/num_phases}+{load_value_Q/num_phases}j" # For multi-phase loads this divides load evenly across all phases.
+                    load_value_str = f"{load_value_P/num_phases}{load_value_Q/num_phases:+}j" # For multi-phase loads this divides load evenly across all phases.
                     load_string = "\t\t\"constant_power_{phase}\": \"{value}\"".format(phase=ph,value=load_value_str)
                     pub_json += load_string
                     if ph_ind < num_phases-1:
@@ -167,7 +167,7 @@ if __name__ == "__main__":
                         gen_value_P = -1000*(gen_ami_snap[str(meter_num)].values[0])
                     fixed_pf = 1.00
                     gen_value_Q = gen_value_P*np.sign(fixed_pf)*np.sqrt(1/(fixed_pf**2)-1)
-                    gen_value_str = f"{gen_value_P/num_phases}+{gen_value_Q/num_phases}j" # For multi-phase gens this divides gen evenly across all phases.
+                    gen_value_str = f"{gen_value_P/num_phases}{gen_value_Q/num_phases:+}j" # For multi-phase gens this divides gen evenly across all phases.
                     gen_string = "\t\t\"constant_power_{phase}\": \"{value}\"".format(phase=ph,value=gen_value_str)
                     pub_json += gen_string
                     if ph_ind < num_phases-1:

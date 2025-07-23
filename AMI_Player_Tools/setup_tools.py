@@ -286,7 +286,7 @@ def parse_ami_data(substation_name,ami_type="Load",save_15min=False):
     hourly_data.to_csv(f"Feeder_Data/{substation_name}/AMI_Data/{substation_name}_{ami_type}_AMI_Data.csv", index=True)  # Set index=False if you don't want to save the index
 
     if save_15min:
-        pivot_df.to_csv('Feeder_Data/{substation_name}/AMI_Data/{substation_name}_{ami_type}_AMI_Data_15_min.csv', index=True)  # Set index=False if you don't want to save the index
+        pivot_df.to_csv(f"Feeder_Data/{substation_name}/AMI_Data/{substation_name}_{ami_type}_AMI_Data_15_min.csv", index=True)  # Set index=False if you don't want to save the index
 
     print(f"Parsed AMI {ami_type} data for {substation_name} into a CSV file. Located in Feeder_Data/{substation_name}/AMI_Data/ folder.")
 
@@ -306,13 +306,13 @@ def calculate_true_load(substation_name): # This function should likely be combi
     # Get meters with BTM gen
     meters_with_btm_df = sp_meter_df[sp_meter_df['Has Separate Gen Meter'] == 'Y']
     meters_with_btm = meters_with_btm_df['Meter Number'].tolist()
-    btm_meters = meters_with_btm_df['Gen Meter'].tolist()
+    btm_meters = list(map(str,list(map(int,meters_with_btm_df['Gen Meter'].tolist()))))
 
     true_load_df = net_load_df
     missing_loads_with_btm = []
     for meter_ind, meter in enumerate(meters_with_btm):
-        if meter in btm_meters:
-            gen_ami_df[str(int(btm_meters[meter_ind]))] = 0
+        if meter in btm_meters: # FIX ME: there are some meters that match gen meter nums but have Has Seperate Gen Meter = N
+            gen_ami_df[btm_meters[meter_ind]] = 0
         else:
             if str(meter) in net_load_df.columns:
                 true_load_df[str(meter)] = true_load_df[str(meter)] + gen_ami_df[str(int(btm_meters[meter_ind]))]
