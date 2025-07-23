@@ -3,7 +3,7 @@ import GLM_Tools.parsing_tools as glm_parser
 import GLM_Tools.modif_tools as glm_modif_tools
 import os
 
-substation_name = "South_Alburgh"
+substation_name = "Burton_Hill_small00"
 
 # Meter Number Dictionary Settings
 build_meter_dicts_flag = False # Set this to False if you already built these CSV files
