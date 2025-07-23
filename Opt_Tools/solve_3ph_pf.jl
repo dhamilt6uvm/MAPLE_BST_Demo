@@ -119,53 +119,53 @@ end
 # print(model)
 optimize!(model)
 
-## Compare results to GLD
-gld_node_mags_A_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_mags_A.csv",skipto=10,header=9) |> DataFrame
-gld_node_mags_B_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_mags_B.csv",skipto=10,header=9) |> DataFrame
-gld_node_mags_C_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_mags_C.csv",skipto=10,header=9) |> DataFrame
+# ## Compare results to GLD
+# gld_node_mags_A_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_mags_A.csv",skipto=10,header=9) |> DataFrame
+# gld_node_mags_B_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_mags_B.csv",skipto=10,header=9) |> DataFrame
+# gld_node_mags_C_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_mags_C.csv",skipto=10,header=9) |> DataFrame
 
-gld_node_angs_A_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_angs_A.csv",skipto=10,header=9) |> DataFrame
-gld_node_angs_B_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_angs_B.csv",skipto=10,header=9) |> DataFrame
-gld_node_angs_C_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_angs_C.csv",skipto=10,header=9) |> DataFrame
+# gld_node_angs_A_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_angs_A.csv",skipto=10,header=9) |> DataFrame
+# gld_node_angs_B_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_angs_B.csv",skipto=10,header=9) |> DataFrame
+# gld_node_angs_C_df = CSV.File("Feeder_Data/$(substation_name)/Output_Data/node_voltage_angs_C.csv",skipto=10,header=9) |> DataFrame
 
-Vph_gld = zeros(ComplexF64, 3, n_nodes)
-for (nd_ind, Node) in enumerate(psm.Nodes)
-    Vmag_a = gld_node_mags_A_df[t_ind,Node.name]
-    Vang_a = gld_node_angs_A_df[t_ind,Node.name]
-    Vmag_b = gld_node_mags_B_df[t_ind,Node.name]
-    Vang_b = gld_node_angs_B_df[t_ind,Node.name]
-    Vmag_c = gld_node_mags_C_df[t_ind,Node.name]
-    Vang_c = gld_node_angs_C_df[t_ind,Node.name]
-    Vph_gld[1,nd_ind] = Vmag_a*exp(1im*Vang_a)/Node.Vbase
-    Vph_gld[2,nd_ind] = Vmag_b*exp(1im*Vang_b)/Node.Vbase
-    Vph_gld[3,nd_ind] = Vmag_c*exp(1im*Vang_c)/Node.Vbase
-end
+# Vph_gld = zeros(ComplexF64, 3, n_nodes)
+# for (nd_ind, Node) in enumerate(psm.Nodes)
+#     Vmag_a = gld_node_mags_A_df[t_ind,Node.name]
+#     Vang_a = gld_node_angs_A_df[t_ind,Node.name]
+#     Vmag_b = gld_node_mags_B_df[t_ind,Node.name]
+#     Vang_b = gld_node_angs_B_df[t_ind,Node.name]
+#     Vmag_c = gld_node_mags_C_df[t_ind,Node.name]
+#     Vang_c = gld_node_angs_C_df[t_ind,Node.name]
+#     Vph_gld[1,nd_ind] = Vmag_a*exp(1im*Vang_a)/Node.Vbase
+#     Vph_gld[2,nd_ind] = Vmag_b*exp(1im*Vang_b)/Node.Vbase
+#     Vph_gld[3,nd_ind] = Vmag_c*exp(1im*Vang_c)/Node.Vbase
+# end
 
-# correct for missing phases
-Vph_opt = value.(Vph)
-for (nd_ind,Node) in enumerate(psm.Nodes)
-    if ~occursin("A",Node.phases)
-        Vph_opt[1,nd_ind] = 0.0
-    end
-    if ~occursin("B",Node.phases)
-        Vph_opt[2,nd_ind] = 0.0
-    end
-    if ~occursin("C",Node.phases)
-        Vph_opt[3,nd_ind] = 0.0
-    end
-end
+# # correct for missing phases
+# Vph_opt = value.(Vph)
+# for (nd_ind,Node) in enumerate(psm.Nodes)
+#     if ~occursin("A",Node.phases)
+#         Vph_opt[1,nd_ind] = 0.0
+#     end
+#     if ~occursin("B",Node.phases)
+#         Vph_opt[2,nd_ind] = 0.0
+#     end
+#     if ~occursin("C",Node.phases)
+#         Vph_opt[3,nd_ind] = 0.0
+#     end
+# end
 
-mag_err = abs.(Vph_opt)-abs.(Vph_gld)
-p2 = plot(1:n_nodes,transpose(mag_err),label=["Phase A" "Phase B" "Phase C"])
-xlabel!("Node Index")
-ylabel!("Absolute Voltage Magnitude Error (pu)")
-display(p2)
+# mag_err = abs.(Vph_opt)-abs.(Vph_gld)
+# p2 = plot(1:n_nodes,transpose(mag_err),label=["Phase A" "Phase B" "Phase C"])
+# xlabel!("Node Index")
+# ylabel!("Absolute Voltage Magnitude Error (pu)")
+# display(p2)
 
-ang_err = angle.(Vph_opt)-angle.(Vph_gld)
-p3 = plot(1:n_nodes,transpose(ang_err),label=["Phase A" "Phase B" "Phase C"])
-xlabel!("Node Index")
-ylabel!("Absolute Voltage Angle Error (rad)")
-display(p3)
+# ang_err = angle.(Vph_opt)-angle.(Vph_gld)
+# p3 = plot(1:n_nodes,transpose(ang_err),label=["Phase A" "Phase B" "Phase C"])
+# xlabel!("Node Index")
+# ylabel!("Absolute Voltage Angle Error (rad)")
+# display(p3)
 
 # visualize feeder
 node_Xcoords = [Node.X_coord for Node in psm.Nodes]
