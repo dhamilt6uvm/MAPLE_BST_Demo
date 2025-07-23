@@ -208,6 +208,22 @@ plot!(title="Phase B",xformatter=:none,yformatter=:none,legend=:false,subplot=2)
 plot!(title="Phase C",xformatter=:none,yformatter=:none,legend=:false,subplot=3)
 display(vis_plt)
 
+# colorbar plot
+dummy_vals = reshape(range(Vmin, Vmax, length=100), :, 1)
+
+colorbar_plot = heatmap(
+    dummy_vals,
+    c=cgrad(:turbo),
+    axis=nothing,
+    colorbar=true,
+    size=(150, 400),
+    ticks=:native
+)
+
+display(colorbar_plot)
+
+# single phase plot
+
 
 # # cb_plt = heatmap(rand(2,2), clims=(Vmin,Vmax),  right_margin = 10Plots.mm, framestyle=:none, c=node_colormap, cbar=true, lims=(-1,0),colorbar_title = " \nVoltage Magnitude (pu)")
 # # display(cb_plt)
