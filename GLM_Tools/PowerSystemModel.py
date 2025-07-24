@@ -164,6 +164,21 @@ class PowerSystemModel:
                 if config_name not in self.Config_Dict:
                     raise ValueError(f"Could not find line config object: {config_name}")
                 branch_config = self.Config_Dict[config_name] 
+                # get turns ratio
+                from_node_name = branch.from_node
+                to_node_name = branch.to_node
+                if from_node_name not in self.Node_Dict:
+                    from_node_name = find_node_parent(from_node_name,self.Node_Dict,self.Shunt_Dict)
+                if to_node_name not in self.Node_Dict:
+                    to_node_name = find_node_parent(to_node_name,self.Node_Dict,self.Shunt_Dict)
+                from_node = self.Node_Dict[from_node_name]
+                to_node = self.Node_Dict[to_node_name]
+                branch.Vbp_ln = from_node.Vbase
+                branch.Vbs_ln = to_node.Vbase
+                branch.Vp_rated = branch_config.primary_voltage
+                branch.Vs_rated = branch_config.secondary_voltage
+                branch.nt_pu = (branch.Vp_rated/branch.Vs_rated)/(branch.Vbp_ln/branch.Vbs_ln)
+                # convert impedance to pu
                 branch.ratedKVA = branch_config.power_rating
                 r_pu = (self.Sbase_1ph/(1000*branch.ratedKVA))*branch_config.resistance
                 x_pu = (self.Sbase_1ph/(1000*branch.ratedKVA))*branch_config.reactance
@@ -180,28 +195,21 @@ class PowerSystemModel:
                 # V_ABC = A*V_abc + B*I_abc
                 # I_ABC = C*V_abc + D*I_abc
                 if branch_config.connect_type in ["SINGLE_PHASE","WYE_WYE"]:
-                    branch.A_br = np.eye(3)
-                    branch.B_br = branch.Z_pu_3ph
+                    branch.A_br = branch.nt_pu*np.eye(3)
+                    branch.B_br = branch.nt_pu*branch.Z_pu_3ph
                     branch.C_br = np.zeros(3)
-                    branch.D_br = np.eye(3)
+                    branch.D_br = np.eye(3)/branch.nt_pu
                 elif branch_config.connect_type in ["DELTA_GWYE"]:
-                    branch.A_br = -np.array([[0,2,1],[1,0,2],[2,1,0]])/np.sqrt(3)
-                    branch.B_br = np.dot(branch.A_br,branch.Z_pu_3ph)
+                    branch.A_br = -branch.nt_pu*np.array([[0,2,1],[1,0,2],[2,1,0]])/np.sqrt(3)
+                    branch.B_br = branch.nt_pu*np.dot(branch.A_br,branch.Z_pu_3ph)
                     branch.C_br = np.zeros(3)
-                    branch.D_br = np.array([[1,-1,0],[0,1,-1],[-1,0,1]])/np.sqrt(3)
+                    branch.D_br = np.array([[1,-1,0],[0,1,-1],[-1,0,1]])/(np.sqrt(3)*branch.nt_pu)
                 elif branch_config.connect_type in ["DELTA_DELTA"]:
-                    if branch.phases == 'ABCD':
-                        branch.A_br = np.array([[2,-1,-1],[-1,2,-1],[-1,-1,2]])/3
-                        branch.B_br = complex(r_pu,x_pu)/3*np.array([[1,0,0],[0,1,0],[-1,-1,0]])
-                        branch.C_br = np.zeros(3)
-                        branch.D_br = np.eye(3)
-                    elif branch.phases == 'BCD':
-                        branch.A_br = np.array([[2,-1,-1],[-1,2,-1],[-1,-1,2]])/3
-                        branch.B_br = complex(r_pu,x_pu)/3*np.array([[0,-0.5,0.5],[0,-1,1],[0,0,0]])
-                        branch.C_br = np.zeros(3)
-                        branch.D_br = np.array([[0,0,0],[0,1,0],[0,0,1]])
-                    else:
-                        raise ValueError(f"Connection type {branch_config.connect_type} with phases {branch.phases} not yet supported for branch {branch.name}.")
+                    # branch.A_br = np.array([[2,-1,-1],[-1,2,-1],[-1,-1,2]])/3
+                    branch.A_br = branch.nt_pu*np.eye(3)
+                    branch.B_br = branch.nt_pu*complex(r_pu,x_pu)*np.array([[1,0,0],[0,1,0],[-1,-1,0]])
+                    branch.C_br = np.zeros(3)
+                    branch.D_br = np.eye(3)/branch.nt_pu
                 else:
                     raise ValueError(f"Connection type {branch_config.connect_type} not yet supported for branch {branch.name}.")
             if branch.type in ["fuse", "switch", "sectionalizer", "recloser", "regulator"]:

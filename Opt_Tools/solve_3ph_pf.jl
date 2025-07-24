@@ -28,9 +28,18 @@ close(pkl_file)
 n_nodes = length(psm.Nodes)
 n_branches = length(psm.Branches)
 
+# find number of delta-connected loads (need to create additional variables for delta currents)
+n_loads_D = 0
+for Load in psm.Loads
+    if occursin("D", Load.phases)
+        global n_loads_D
+        n_loads_D = n_loads_D + 1
+    end
+end
+
 # Substation Voltage
 V0_mag = 1
-V0_ref = V0_mag*[1,exp(-im*2*pi/3),exp(im*2*pi/3)]
+V0_ref = V0_mag*[1.0,exp(-im*2*pi/3),exp(im*2*pi/3)]
 
 # Model Setup
 model = Model(Ipopt.Optimizer)
@@ -50,6 +59,8 @@ end
 @variable(model, Vph_imag[ph=1:3,1:n_nodes], start=imag(V0_ref[ph]*exp(-im*pi/6)))
 @variable(model, Iph_real[1:3,1:n_branches], start=0)
 @variable(model, Iph_imag[1:3,1:n_branches], start=0)
+@variable(model, Iload_D_real[1:3,1:n_loads_D], start=0)
+@variable(model, Iload_D_imag[1:3,1:n_loads_D], start=0)
 
 set_start_value.(Vph_real[:,1], real(V0_ref))
 set_start_value.(Vph_imag[:,1], imag(V0_ref))
@@ -57,6 +68,7 @@ set_start_value.(Vph_imag[:,1], imag(V0_ref))
 # Complex Variable Expressions
 @expression(model, Vph, Vph_real.+im*Vph_imag)
 @expression(model, Iph, Iph_real.+im*Iph_imag)
+@expression(model, Iload_D, Iload_D_real.+im*Iload_D_imag)
 
 # Substation Voltage Constraint
 @constraint(model, Vph[:,1] .== V0_ref)
@@ -84,10 +96,24 @@ end
 
 # Power Injection Constraints
 t_ind = 5
-s_load = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
+s_load_Y = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
+s_load_D = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
+gamma_D = [[1.0 -1.0 0.0];[0.0 1.0 -1.0];[-1.0 0.0 1.0]]
+delta_node_ind = 1
 for (ld_ind, Load) in enumerate(psm.Loads)
     if haskey(Load,"Sload")
-        s_load[:,Load.parent_node_ind+1] += Load.Sload[t_ind,:]
+        parent_node_ind = Load.parent_node_ind+1
+        if occursin("N", Load.phases)
+            s_load_Y[:,parent_node_ind] += Load.Sload[t_ind,:]
+        elseif occursin("D", Load.phases)
+            @constraint(model, diag(gamma_D*Vph[:,parent_node_ind]*Iload_D[:,delta_node_ind]') .== Load.Sload[t_ind,:])
+            # @constraint(model, diag(gamma_D*Vph[:,parent_node_ind]*Iload_D[:,delta_node_ind]') .== zeros(3,1))
+            s_load_D[:,parent_node_ind] += diag(Vph[:,parent_node_ind]*Iload_D[:,delta_node_ind]'*gamma_D)
+            global delta_node_ind
+            delta_node_ind = delta_node_ind + 1
+        else
+            throw(ArgumentError("Can't determine if Load $(Load.name) is wye or delta connected."))
+        end
     end
 end
 s_gen = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
@@ -109,10 +135,10 @@ for (sht_ind, Shunt) in enumerate(psm.Shunts)
             status[3] = 1
         end
         parent_node_ind = Shunt.parent_node_ind+1
-        s_load[:,parent_node_ind] += status.*diag(Vph[:,parent_node_ind]*Vph[:,parent_node_ind]'*conj(Shunt.Ycap))
+        s_load_Y[:,parent_node_ind] += status.*diag(Vph[:,parent_node_ind]*Vph[:,parent_node_ind]'*conj(Shunt.Ycap))
     end
 end
-@constraint(model, pb_rhs[:,2:end] - pb_lhs[:,2:end] .== s_gen[:,2:end]-s_load[:,2:end])
+@constraint(model, pb_rhs[:,2:end] - pb_lhs[:,2:end] .== s_gen[:,2:end]-s_load_Y[:,2:end]-s_load_D[:,2:end])
 
 # Objective
 # @objective(model, Min, sum(real(s_inj[:,1])))
@@ -187,6 +213,7 @@ node_colors_a = [get(node_colormap,val) for val in norm_Vmag_out_a]
 node_colors_b = [get(node_colormap,val) for val in norm_Vmag_out_b]
 node_colors_c = [get(node_colormap,val) for val in norm_Vmag_out_c]
 
+# vis_plt = plot(layout=grid(1,4, widths=(0.3,0.3,0.3,0.1)), size=(1200,300))
 vis_plt = plot(layout=grid(1,3, widths=(1/3,1/3,1/3)), size=(1200,300))
 for (br_ind,Branch) in enumerate(psm.Branches)
     plot!([Branch.X_coord,Branch.X2_coord],[Branch.Y_coord,Branch.Y2_coord],color=:black,subplot=1)
@@ -207,6 +234,7 @@ end
 plot!(title="Phase A",xformatter=:none,yformatter=:none,legend=:false,subplot=1)
 plot!(title="Phase B",xformatter=:none,yformatter=:none,legend=:false,subplot=2)
 plot!(title="Phase C",xformatter=:none,yformatter=:none,legend=:false,subplot=3)
+# heatmap!(rand(2,2), clims=(Vmin,Vmax),  right_margin = 10Plots.mm, framestyle=:none, c=node_colormap, cbar=true, lims=(-1,0),colorbar_title = " \nVoltage Magnitude (pu)",subplot=4)
 display(vis_plt)
 
 # colorbar plot - axis labels are cut off... 
@@ -260,5 +288,5 @@ display(colorbar_plot)
 #     # plot!(title="Phase $single_phase",xformatter=:none,yformatter=:none,legend=:false)
 # end
 
-# # cb_plt = heatmap(rand(2,2), clims=(Vmin,Vmax),  right_margin = 10Plots.mm, framestyle=:none, c=node_colormap, cbar=true, lims=(-1,0),colorbar_title = " \nVoltage Magnitude (pu)")
-# # display(cb_plt)
+# cb_plt = heatmap(rand(2,2), clims=(Vmin,Vmax),  right_margin = 10Plots.mm, framestyle=:none, c=node_colormap, cbar=true, lims=(-1,0),colorbar_title = " \nVoltage Magnitude (pu)")
+# display(cb_plt)

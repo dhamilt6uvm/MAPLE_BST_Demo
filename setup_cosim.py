@@ -3,7 +3,7 @@ import GLM_Tools.parsing_tools as glm_parser
 import GLM_Tools.modif_tools as glm_modif_tools
 import os
 
-substation_name = "Burton_Hill_small00"
+substation_name = "Burton_Hill"
 
 # Meter Number Dictionary Settings
 build_meter_dicts_flag = False # Set this to False if you already built these CSV files
@@ -12,18 +12,19 @@ build_meter_dicts_flag = False # Set this to False if you already built these CS
 generate_MySQL_query_flag = False # Set this to False if you already have AMI data
 mysql_query_start_time = "2024-01-01 00:00:00"
 mysql_query_end_time = "2025-01-01 00:00:00"
-max_meters_per_query = 2000 # Set this to avoid massive queries that time out. This will break up into multiple queries.
+max_meters_per_query = 1000 # Set this to avoid massive queries that time out. This will break up into multiple queries.
 
 # AMI Data Parsing Settings
 parse_ami_data_flag = False
+save_15min_flag = False
 
 # Parse GLM Settings
 parse_glm_flag = True
 
 # Create Simulation Settings
 create_new_sim_flag = True
-sim_start_time = '2024-02-01 00:00:00'
-sim_end_time = '2024-02-08 00:00:00'
+sim_start_time = '2024-09-01 00:00:00'
+sim_end_time = '2024-09-08 00:00:00'
 ami_load_fixed_pf = 0.98
 include_hc = False
 regulator_control = "MANUAL" # use "DEFAULT" to not change regulator controls
@@ -45,8 +46,8 @@ if generate_MySQL_query_flag:
     exit()
 
 if parse_ami_data_flag:
-    setup_tools.parse_ami_data(substation_name, "Load")
-    setup_tools.parse_ami_data(substation_name, "Gen")
+    setup_tools.parse_ami_data(substation_name, "Load", save_15min_flag)
+    setup_tools.parse_ami_data(substation_name, "Gen", save_15min_flag)
     setup_tools.calculate_true_load(substation_name)
 
 if parse_glm_flag:
@@ -69,8 +70,14 @@ if create_new_sim_flag:
     print(f"helics run --path Runner_Files/{substation_name}/{substation_name}_cosim_runner.json")
 
 if add_ami_to_pkl_flag:
+    print(f"Populating pkl file with AMI data...")
     glm_parser.populate_ami_loads_pkl(substation_name, sim_start_time, sim_end_time, ami_load_fixed_pf)
+    print(f"Done populating pkl file with AMI data.")
 
 if add_coords_to_pkl_flag:    
+    print(f"Populating pkl file with coordinate data...")
     glm_parser.add_coords_to_pkl(substation_name)
+    print(f"Done populating pkl file with coordinate data.")
+    print(f"Plotting feeder...")
     glm_parser.plot_feeder(substation_name)
+    print(f"Done plotting feeder.")
