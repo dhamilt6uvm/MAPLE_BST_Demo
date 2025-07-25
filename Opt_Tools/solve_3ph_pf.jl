@@ -13,16 +13,26 @@ using DataFrames
 using Printf
 
 # Import Python modules
-pickle = pyimport("pickle")
-pushfirst!(pyimport("sys")."path", "")
-pyimport("GLM_Tools")
+# pickle = pyimport("pickle")
+# pushfirst!(pyimport("sys")."path", "")
+# pyimport("GLM_Tools")
 
 # Load the .pkl file 
-substation_name = "Burton_Hill_small00"
+# substation_name = "Burton_Hill_small00"
+# fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model.pkl"
+# pkl_file = open(fname, "r")
+# psm = pickle.load(pkl_file)
+
+pickle = pyimport("pickle")
+pyopen = pyimport("builtins").open
+
+substation_name = "Burton_Hill"
 fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model.pkl"
-pkl_file = open(fname, "r")
-psm = pickle.load(pkl_file)
-close(pkl_file)
+
+# Explicitly open and close the file
+f = pyopen(fname, "rb")
+psm = pickle.load(f)
+f.close()
 
 # get network info
 n_nodes = length(psm.Nodes)

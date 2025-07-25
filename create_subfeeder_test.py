@@ -8,7 +8,7 @@ substation_name = "Burton_Hill"
 # start_node = "_43-7-3A_n"
 # branches_to_remove = ["_43-7-3A"]
 
-subfeeder_name = "SinglePhase"
+subfeeder_name = "small01"
 start_node = "span_51271_n"
 branches_to_remove = ["span_51271"]
 
