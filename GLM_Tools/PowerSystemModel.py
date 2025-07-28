@@ -17,11 +17,17 @@ def convert_phases(val,from_phases,to_phases):
     else:
         raise ValueError(f"convert_phases not supported for values of dimension {val.ndim}")
     
-def find_node_parent(node_name,Node_Dict,Shunt_Dict):
+def find_node_parent(node_name,Node_Dict,Load_Dict,Generator_Dict,Shunt_Dict):
     max_find_parent_tries = 10
     find_parent_tries = 0
     while (node_name not in Node_Dict) and (find_parent_tries < max_find_parent_tries):
-        if node_name in Shunt_Dict:
+        if node_name in Load_Dict:
+            load_obj = Load_Dict[node_name]
+            node_name = load_obj.parent
+        elif node_name in Generator_Dict:
+            generator_obj = Generator_Dict[node_name]
+            node_name = generator_obj.parent
+        elif node_name in Shunt_Dict:
             shunt_obj = Shunt_Dict[node_name]
             node_name = shunt_obj.parent
         else:
@@ -57,6 +63,10 @@ class PowerSystemModel:
         
 
         self.Node_Dict = {obj.name: obj for obj in self.Nodes}
+        self.Load_Dict = {obj.name: obj for obj in self.Loads}
+        self.Generator_Dict = {obj.name: obj for obj in self.Generators}
+        self.Shunt_Dict = {obj.name: obj for obj in self.Shunts}
+        self.Config_Dict = {obj.name: obj for obj in self.Configs}
 
         # check for parented nodes, and create fake branches for them
         for ind, node in enumerate(self.Nodes):
@@ -85,35 +95,44 @@ class PowerSystemModel:
 
         for load in self.Loads:
             parent_name = load.parent
+            if parent_name not in self.Node_Dict:
+                parent_name = find_node_parent(parent_name,self.Node_Dict,self.Load_Dict,self.Generator_Dict,self.Shunt_Dict)
             parent_node = self.Node_Dict[parent_name]
             load.parent_node_ind = parent_node.index
+            # update Load_Dict
+            self.Load_Dict[load.name] = load
             # convert Sload to per unit
             # load.Sload = load.Sload/self.Sbase_1ph
 
         for gen in self.Generators:
             parent_name = gen.parent
+            if parent_name not in self.Node_Dict:
+                parent_name = find_node_parent(parent_name,self.Node_Dict,self.Load_Dict,self.Generator_Dict,self.Shunt_Dict)
             parent_node = self.Node_Dict[parent_name]
             gen.parent_node_ind = parent_node.index
+            # update Load_Dict
+            self.Generator_Dict[gen.name] = gen
             # convert Sgen to per unit
             # load.Sgen = load.Sgen/self.Sbase_1ph
 
         for shunt in self.Shunts:
             parent_name = shunt.parent
+            if parent_name not in self.Node_Dict:
+                parent_name = find_node_parent(parent_name,self.Node_Dict,self.Load_Dict,self.Generator_Dict,self.Shunt_Dict)
             parent_node = self.Node_Dict[parent_name]
             shunt.parent_node_ind = parent_node.index
+            # update Shunt_Dict
+            self.Shunt_Dict[shunt.name] = shunt
 
-        self.Load_Dict = {obj.name: obj for obj in self.Loads}
-        self.Generator_Dict = {obj.name: obj for obj in self.Generators}
-        self.Shunt_Dict = {obj.name: obj for obj in self.Shunts}
-        self.Config_Dict = {obj.name: obj for obj in self.Configs}
+        
 
         for branch in self.Branches:
             from_node_name = branch.from_node
             to_node_name = branch.to_node
             if from_node_name not in self.Node_Dict:
-                from_node_name = find_node_parent(from_node_name,self.Node_Dict,self.Shunt_Dict)
+                from_node_name = find_node_parent(from_node_name,self.Node_Dict,self.Load_Dict,self.Generator_Dict,self.Shunt_Dict)
             if to_node_name not in self.Node_Dict:
-                to_node_name = find_node_parent(to_node_name,self.Node_Dict,self.Shunt_Dict)
+                to_node_name = find_node_parent(to_node_name,self.Node_Dict,self.Load_Dict,self.Generator_Dict,self.Shunt_Dict)
             from_node = self.Node_Dict[from_node_name]
             to_node = self.Node_Dict[to_node_name]
             branch.from_node_ind = from_node.index
@@ -131,7 +150,11 @@ class PowerSystemModel:
                 if config_name not in self.Config_Dict:
                     raise ValueError(f"Could not find line config object: {config_name}")
                 branch_config = self.Config_Dict[config_name] 
-                Z_ohms_per_mi = np.array([[branch_config.z11,branch_config.z12,branch_config.z13],
+                if hasattr(branch_config,"spacing"):
+                    print(dir(branch_config))
+                    raise ValueError(f"Need to parse conductor and spacing data.")
+                else:
+                    Z_ohms_per_mi = np.array([[branch_config.z11,branch_config.z12,branch_config.z13],
                                               [branch_config.z21,branch_config.z22,branch_config.z23],
                                               [branch_config.z31,branch_config.z32,branch_config.z33]])
                 mi_per_foot = 1/5280
@@ -388,15 +411,22 @@ class Config:
         self.glm_string = glm_string
 
         if self.type in ["line_configuration"]:
-            self.z11 = params[0] # in Ohms/mi
-            self.z12 = params[1] 
-            self.z13 = params[2] 
-            self.z21 = params[3] 
-            self.z22 = params[4] 
-            self.z23 = params[5] 
-            self.z31 = params[6] 
-            self.z32 = params[7] 
-            self.z33 = params[8] 
+            if params[0]: # params[0] is a flag indicating definition type: True = conductors and spacing, False = Z-matrix
+                self.conductor_A = params[1]
+                self.conductor_B = params[2]
+                self.conductor_C = params[3]
+                self.conductor_N = params[4]
+                self.spacing = params[5]
+            else:
+                self.z11 = params[1] # in Ohms/mi
+                self.z12 = params[2] 
+                self.z13 = params[3] 
+                self.z21 = params[4] 
+                self.z22 = params[5] 
+                self.z23 = params[6] 
+                self.z31 = params[7] 
+                self.z32 = params[8] 
+                self.z33 = params[9] 
 
         elif self.type in ["transformer_configuration"]:
             self.connect_type = params[0] 

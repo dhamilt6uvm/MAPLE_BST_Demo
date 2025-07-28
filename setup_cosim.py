@@ -3,7 +3,7 @@ import GLM_Tools.parsing_tools as glm_parser
 import GLM_Tools.modif_tools as glm_modif_tools
 import os
 
-substation_name = "Burton_Hill"
+substation_name = "IEEE_13_Node"
 
 # Meter Number Dictionary Settings
 build_meter_dicts_flag = False # Set this to False if you already built these CSV files
@@ -23,17 +23,17 @@ parse_glm_flag = True
 
 # Create Simulation Settings
 create_new_sim_flag = True
-sim_start_time = '2024-09-01 00:00:00'
-sim_end_time = '2024-09-08 00:00:00'
+sim_start_time = "2024-01-01 00:00:00"
+sim_end_time = "2024-01-08 00:00:00"
 ami_load_fixed_pf = 0.98
 include_hc = False
 regulator_control = "MANUAL" # use "DEFAULT" to not change regulator controls
 
 # Optimization Settings
-add_ami_to_pkl_flag = True
+add_ami_to_pkl_flag = False
 
 # Visualization Settings
-add_coords_to_pkl_flag = True
+add_coords_to_pkl_flag = False
 
 #############################################################################################################
 

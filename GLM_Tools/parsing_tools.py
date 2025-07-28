@@ -17,7 +17,7 @@ def parse_node(node_string):
     else:
         raise ValueError(f"Could not find name of node object: {node_string}")
     
-    phases_match = re.search(r"phases\s+([ABCDN]*);", node_string, re.S)
+    phases_match = re.search(r"phases\s+(?:\"([ABCDN]*)\"|([ABCDN]*));", node_string, re.S)
     if phases_match:
         phases = phases_match.group(1)
     else:
@@ -64,7 +64,7 @@ def parse_branch(branch_type,branch_string):
     else:
         raise ValueError(f"Could not find to bus of branch object: {branch_string}")
     
-    phases_match = re.search(r"phases\s+([ABCDN]*);", branch_string, re.S)
+    phases_match = re.search(r"phases\s+(?:\"([ABCDN]*)\"|([ABCDN]*));", branch_string, re.S)
     if phases_match:
         phases = phases_match.group(1)
     else:
@@ -148,9 +148,9 @@ def parse_load(load_string):
     if parent_match:
         parent = parent_match.group(1)
     else:
-        raise ValueError(f"Could not find parent of load object: {load_string}")
+        parent = None
     
-    phases_match = re.search(r"phases\s+([ABCDN]*);", load_string, re.S)
+    phases_match = re.search(r"phases\s+(?:\"([ABCDN]*)\"|([ABCDN]*));", load_string, re.S)
     if phases_match:
         phases = phases_match.group(1)
     else:
@@ -188,7 +188,7 @@ def parse_generator(gen_string):
     else:
         raise ValueError(f"Could not find parent of gen object: {gen_string}")
     
-    phases_match = re.search(r"phases\s+([ABCDN]*);", gen_string, re.S)
+    phases_match = re.search(r"phases\s+(?:\"([ABCDN]*)\"|([ABCDN]*));", gen_string, re.S)
     if phases_match:
         phases = phases_match.group(1)
     else:
@@ -226,7 +226,7 @@ def parse_shunt(shunt_type,shunt_string):
     else:
         raise ValueError(f"Could not find parent of shunt object: {shunt_string}")
     
-    phases_match = re.search(r"phases\s+([ABCDN]*);", shunt_string, re.S)
+    phases_match = re.search(r"phases\s+(?:\"([ABCDN]*)\"|([ABCDN]*));", shunt_string, re.S)
     if phases_match:
         phases = phases_match.group(1)
     else:
@@ -298,16 +298,33 @@ def parse_config(config_type,config_string):
     config_params = []
 
     if config_type in ["line_configuration"]:
-        z_strs = ['11','12','13','21','22','23','31','32','33']
-        for z_str in z_strs:
-            z_match = re.search(fr"z{z_str}\s+([+-]?\d*\.\d+[+-]?\d*\.\d+j);", config_string, re.S)
-            if z_match:
-                z = complex(z_match.group(1))
-            else:
-                z = complex(1e-4,1e-4)
-                warnings.warn("WARNING: Need to implement conductor and line spacing parsing!")
-                # raise ValueError(f"Could not find z{z_str} of line config object: {config_string}")
-            config_params.append(z)
+        # check if conductor and spacing or impedance matrix
+        spacing_match = re.search(r"spacing\s+([^\s][^;]*);", config_string, re.S)
+        if spacing_match: # conductor and spacing definition
+            conductor_spacing_def_flag = True
+            config_params.append(conductor_spacing_def_flag)
+            for ph in ["A","B","C","N"]:
+                conductor_name_match = re.search(fr"conductor_{ph}\s+([^\s][^;]*);", config_string, re.S)
+                if conductor_name_match:
+                    conductor_name = conductor_name_match.group(1)
+                else:
+                    conductor_name = None
+                config_params.append(conductor_name)
+            spacing = spacing_match.group(1)
+            config_params.append(spacing)
+        else: # impedance matrix definition
+            conductor_spacing_def_flag = False
+            config_params.append(conductor_spacing_def_flag)
+            z_strs = ['11','12','13','21','22','23','31','32','33']
+            for z_str in z_strs:
+                z_match = re.search(fr"z{z_str}\s+([+-]?\d*\.\d+[+-]?\d*\.\d+j);", config_string, re.S)
+                if z_match:
+                    z = complex(z_match.group(1))
+                else:
+                    z = complex(1e-4,1e-4)
+                    warnings.warn("WARNING: Need to implement conductor and line spacing parsing!")
+                    # raise ValueError(f"Could not find z{z_str} of line config object: {config_string}")
+                config_params.append(z)
 
     elif config_type in ["transformer_configuration"]:
         connect_type_match = re.search(r"connect_type\s+([^\s][^;]*);", config_string, re.S)
@@ -406,21 +423,21 @@ def parse_config(config_type,config_string):
         if CT_phase_match:
             CT_phase = CT_phase_match.group(1)
         else:
-            raise ValueError(f"Could not find CT_phase of regulator config object: {config_string}")
+            CT_phase = None
         config_params.append(CT_phase)
 
         PT_phase_match = re.search(r"PT_phase\s+([ABCDN]*);", config_string, re.S)
         if PT_phase_match:
             PT_phase = PT_phase_match.group(1)
         else:
-            raise ValueError(f"Could not find PT_phase of regulator config object: {config_string}")
+            PT_phase = None
         config_params.append(PT_phase)
 
         Type_match = re.search(r"Type\s+([AB]);", config_string, re.S)
         if Type_match:
             Type = Type_match.group(1)
         else:
-            raise ValueError(f"Could not find Type of regulator config object: {config_string}")
+            Type = None
         config_params.append(Type)
 
         Control_match = re.search(r"Control\s+([^\s][^;]*);", config_string, re.S)
@@ -434,7 +451,7 @@ def parse_config(config_type,config_string):
         if control_level_match:
             control_level = control_level_match.group(1)
         else:
-            raise ValueError(f"Could not find control_level of regulator config object: {config_string}")
+            control_level = None
         config_params.append(control_level)
 
         for ph in ["A","B","C"]:
@@ -445,13 +462,130 @@ def parse_config(config_type,config_string):
                 raise ValueError(f"Could not find tap_pos_{ph} of regulator config object: {config_string}")
             config_params.append(tap_pos)
 
+    if config_type in ["overhead_line_conductor"]:
+        geometric_mean_radius_match = re.search(r"geometric_mean_radius\s+(\d+(\.\d+)?);", config_string, re.S)
+        if geometric_mean_radius_match:
+            geometric_mean_radius = float(geometric_mean_radius_match.group(1))
+        else:
+            raise ValueError(f"Could not find geometric_mean_radius of overhead_line_conductor config object: {config_string}")
+        config_params.append(geometric_mean_radius)
+
+        resistance_match = re.search(r"resistance\s+(\d+(\.\d+)?);", config_string, re.S)
+        if resistance_match:
+            resistance = float(resistance_match.group(1))
+        else:
+            raise ValueError(f"Could not find resistance of overhead_line_conductor config object: {config_string}")
+        config_params.append(resistance)
+
+        diameter_match = re.search(r"diameter\s+(\d+(\.\d+)?);", config_string, re.S)
+        if diameter_match:
+            diameter = float(diameter_match.group(1))
+        else:
+            diameter = float('nan')
+        config_params.append(diameter)
+
+    if config_type in ["underground_line_conductor"]:
+        outer_diameter_match = re.search(r"outer_diameter\s+(\d+(\.\d+)?);", config_string, re.S)
+        if outer_diameter_match:
+            outer_diameter = float(outer_diameter_match.group(1))
+        else:
+            raise ValueError(f"Could not find outer_diameter of underground_line_conductor config object: {config_string}")
+        config_params.append(outer_diameter)
+
+        conductor_gmr_match = re.search(r"conductor_gmr\s+(\d+(\.\d+)?);", config_string, re.S)
+        if conductor_gmr_match:
+            conductor_gmr = float(conductor_gmr_match.group(1))
+        else:
+            raise ValueError(f"Could not find conductor_gmr of underground_line_conductor config object: {config_string}")
+        config_params.append(conductor_gmr)
+
+        conductor_diameter_match = re.search(r"conductor_diameter\s+(\d+(\.\d+)?);", config_string, re.S)
+        if conductor_diameter_match:
+            conductor_diameter = float(conductor_diameter_match.group(1))
+        else:
+            raise ValueError(f"Could not find conductor_diameter of underground_line_conductor config object: {config_string}")
+        config_params.append(conductor_diameter)
+
+        conductor_resistance_match = re.search(r"conductor_resistance\s+(\d+(\.\d+)?);", config_string, re.S)
+        if conductor_resistance_match:
+            conductor_resistance = float(conductor_resistance_match.group(1))
+        else:
+            raise ValueError(f"Could not find conductor_resistance of underground_line_conductor config object: {config_string}")
+        config_params.append(conductor_resistance)
+
+        neutral_gmr_match = re.search(r"neutral_gmr\s+(\d+(\.\d+)?);", config_string, re.S)
+        if neutral_gmr_match:
+            neutral_gmr = float(neutral_gmr_match.group(1))
+        else:
+            raise ValueError(f"Could not find neutral_gmr of underground_line_conductor config object: {config_string}")
+        config_params.append(neutral_gmr)
+
+        neutral_diameter_match = re.search(r"neutral_diameter\s+(\d+(\.\d+)?);", config_string, re.S)
+        if neutral_diameter_match:
+            neutral_diameter = float(neutral_diameter_match.group(1))
+        else:
+            raise ValueError(f"Could not find neutral_diameter of underground_line_conductor config object: {config_string}")
+        config_params.append(neutral_diameter)
+
+        neutral_resistance_match = re.search(r"neutral_resistance\s+(\d+(\.\d+)?);", config_string, re.S)
+        if neutral_resistance_match:
+            neutral_resistance = float(neutral_resistance_match.group(1))
+        else:
+            raise ValueError(f"Could not find neutral_resistance of underground_line_conductor config object: {config_string}")
+        config_params.append(neutral_resistance)
+
+        neutral_strands_match = re.search(r"neutral_strands\s+(\d+(\.\d+)?);", config_string, re.S)
+        if neutral_strands_match:
+            neutral_strands = float(neutral_strands_match.group(1))
+        else:
+            raise ValueError(f"Could not find neutral_strands of underground_line_conductor config object: {config_string}")
+        config_params.append(neutral_strands)
+
+        insultation_relative_permitivitty_match = re.search(r"insultation_relative_permitivitty\s+(\d+(\.\d+)?);", config_string, re.S)
+        if insultation_relative_permitivitty_match:
+            insultation_relative_permitivitty = float(insultation_relative_permitivitty_match.group(1))
+        else:
+            insultation_relative_permitivitty = float('nan')
+        config_params.append(insultation_relative_permitivitty)
+
+        shield_gmr_match = re.search(r"shield_gmr\s+(\d+(\.\d+)?);", config_string, re.S)
+        if shield_gmr_match:
+            shield_gmr = float(shield_gmr_match.group(1))
+        else:
+            raise ValueError(f"Could not find shield_gmr of underground_line_conductor config object: {config_string}")
+        config_params.append(shield_gmr)
+
+        shield_resistance_match = re.search(r"shield_resistance\s+(\d+(\.\d+)?);", config_string, re.S)
+        if shield_resistance_match:
+            shield_resistance = float(shield_resistance_match.group(1))
+        else:
+            raise ValueError(f"Could not find shield_resistance of underground_line_conductor config object: {config_string}")
+        config_params.append(shield_resistance)
+
+    if config_type in ["line_spacing"]:
+        ph_strs = ['AB','BC','AC','AN','BN','CN','AE','BE','CE','NE']
+        for ph_str in ph_strs:
+            distance_ph_match = re.search(fr"distance_{ph_str}\s+(\d+(\.\d+)?);", config_string, re.S)
+            if distance_ph_match:
+                distance_ph = float(distance_ph_match.group(1))
+            else:
+                distance_ph = float('nan')
+            config_params.append(distance_ph)
+
     return psm.Config(config_type,name,config_params,config_string)
 
 
 def parse_glm_to_pkl(substation_name):
 
+    use_helics_glm_flag = True
+    if "IEEE" in substation_name:
+        use_helics_glm_flag = False
+
     glm_file_dir = f"Feeder_Data/{substation_name}/Input_Data/"
-    glm_file_name = f"{substation_name}_Helics.glm"
+    if use_helics_glm_flag:
+        glm_file_name = f"{substation_name}_Helics.glm"
+    else:
+        glm_file_name = f"{substation_name}.glm"
     glm_file = os.path.join(glm_file_dir,glm_file_name)
 
     pkl_file_dir = f"Feeder_Data/{substation_name}/Python_Model/"
@@ -505,12 +639,25 @@ def parse_glm_to_pkl(substation_name):
             if "negLdGen" in name:
                 Generators.append(parse_generator(load_string))
             else:
-                Loads.append(parse_load(load_string))
+                Load = parse_load(load_string)
+                if Load.parent is None:
+                    # Load doesn't have a parent node, so we'll create a fake one
+                    node_string = (
+                        f"object node {{\n"
+                        f"\tname {Load.name}_fake_node;\n"
+                        f"\tphases {Load.phases};\n"
+                        f"\tnominal_voltage {Load.base_voltage};\n"
+                        f"}}\n\n"
+                    )
+                    Node = parse_node(node_string)
+                    Nodes.append(Node)
+                    Load.parent = Node.name
+                Loads.append(Load)
         elif obj_type in ["capacitor"]:
             shunt_string = obj.group(0)
             shunt_objs.append(shunt_string)
             Shunts.append(parse_shunt(obj_type,shunt_string))
-        elif obj_type in ["regulator_configuration", "transformer_configuration", "line_configuration"]:
+        elif obj_type in ["regulator_configuration", "transformer_configuration", "line_configuration", "overhead_line_conductor", "underground_line_conductor", "line_spacing"]:
             config_string = obj.group(0)
             config_objs.append(config_string)
             Configs.append(parse_config(obj_type,config_string))
