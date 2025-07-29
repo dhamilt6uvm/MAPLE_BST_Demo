@@ -151,7 +151,14 @@ class PowerSystemModel:
                     raise ValueError(f"Could not find line config object: {config_name}")
                 branch_config = self.Config_Dict[config_name] 
                 if hasattr(branch_config,"spacing"):
-                    print(dir(branch_config))
+                    print(branch_config)
+                    print(vars(branch_config))
+                    print(branch_config.conductor_A)
+                    spacing_config_name = branch_config.spacing
+                    if spacing_config_name not in self.Config_Dict:
+                        raise ValueError(f"Could not find spacing config object: {spacing_config_name}")
+                    spacing_config = self.Config_Dict[spacing_config_name] 
+                    print(vars(spacing_config))
                     raise ValueError(f"Need to parse conductor and spacing data.")
                 else:
                     Z_ohms_per_mi = np.array([[branch_config.z11,branch_config.z12,branch_config.z13],
@@ -427,6 +434,18 @@ class Config:
                 self.z31 = params[7] 
                 self.z32 = params[8] 
                 self.z33 = params[9] 
+
+        elif self.type in ["line_spacing"]:
+            self.distanceAB = params[0] 
+            self.distanceBC = params[1] 
+            self.distanceAC = params[2] 
+            self.distanceAN = params[3] 
+            self.distanceBN = params[4] 
+            self.distanceCN = params[5] 
+            self.distanceAE = params[6] 
+            self.distanceBE = params[7] 
+            self.distanceCE = params[8] 
+            self.distanceDE = params[9] 
 
         elif self.type in ["transformer_configuration"]:
             self.connect_type = params[0] 
