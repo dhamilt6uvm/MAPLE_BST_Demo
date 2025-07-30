@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.linalg import solve
 
 def convert_phases(val,from_phases,to_phases):
     if ('N' in from_phases) or ('D' in from_phases):
@@ -151,15 +152,54 @@ class PowerSystemModel:
                     raise ValueError(f"Could not find line config object: {config_name}")
                 branch_config = self.Config_Dict[config_name] 
                 if hasattr(branch_config,"spacing"):
-                    print(branch_config)
-                    print(vars(branch_config))
-                    print(branch_config.conductor_A)
-                    spacing_config_name = branch_config.spacing
-                    if spacing_config_name not in self.Config_Dict:
-                        raise ValueError(f"Could not find spacing config object: {spacing_config_name}")
-                    spacing_config = self.Config_Dict[spacing_config_name] 
-                    print(vars(spacing_config))
-                    raise ValueError(f"Need to parse conductor and spacing data.")
+                    if branch.type in ["overhead_line"]:
+                        n_cond = len(branch.phases)
+                        Z_prim = np.zeros((n_cond,n_cond),dtype=complex)
+                        spacing_config_name = branch_config.spacing
+                        if spacing_config_name not in self.Config_Dict:
+                            raise ValueError(f"Could not find spacing config object: {spacing_config_name}")
+                        spacing_config = self.Config_Dict[spacing_config_name] 
+                        for ph_ind, ph in enumerate(branch.phases):
+                            conductor_attr_name = f"conductor_{ph}"
+                            conductor_config_name = getattr(branch_config,conductor_attr_name) 
+                            if conductor_config_name not in self.Config_Dict:
+                                raise ValueError(f"Could not find conductor config object: {conductor_config_name}")
+                            conductor_config = self.Config_Dict[conductor_config_name] 
+                            # Use Modified Carson's Equations (see Kersting sec. 4.1.4) to compute self and mutual impedances
+                            # Assumptions:
+                            #    Frequency = 60 Hz
+                            #    Earth Resistivity = 100 Ohm-m
+                            for ph_j_ind, ph_j in enumerate(branch.phases):
+                                if ph == ph_j:
+                                    resistance = conductor_config.resistance
+                                    gmr = conductor_config.gmr
+                                    z_ii_real = resistance + 0.0953016
+                                    z_ii_imag = 0.1213422*(np.log(1/gmr)+7.934012812)
+                                    z_ii = complex(z_ii_real,z_ii_imag)
+                                    Z_prim[ph_ind,ph_j_ind] = z_ii
+                                else:
+                                    if hasattr(spacing_config,f"distance{ph}{ph_j}"):
+                                        Dij = getattr(spacing_config,f"distance{ph}{ph_j}")
+                                    elif hasattr(spacing_config,f"distance{ph_j}{ph}"):
+                                        Dij = getattr(spacing_config,f"distance{ph_j}{ph}")
+                                    else:
+                                        raise ValueError(f"Could not find distance from {ph} to {ph_j} in spacing config object: {spacing_config_name}")
+                                    z_ij_real = 0.0953016
+                                    z_ij_imag = 0.1213422*(np.log(1/Dij)+7.934012812)
+                                    z_ij = complex(z_ij_real,z_ij_imag)
+                                    Z_prim[ph_ind,ph_j_ind] = z_ij
+                        non_neutral_phases = branch.phases.replace("N","")
+                        # Kron reduction assuming mulit-grounded neutral
+                        n_nn = len(non_neutral_phases)
+                        Z_Kron = Z_prim[0:n_nn,0:n_nn]-Z_prim[0:n_nn,n_nn:]*solve(Z_prim[n_nn:,n_nn:],Z_prim[n_nn:,0:n_nn])
+                        Z_ohms_per_mi = np.zeros((3,3),dtype=complex)
+                        ph_inds = []
+                        for (k,ph) in enumerate(non_neutral_phases):
+                            ph_ind = "ABC".index(ph)
+                            ph_inds.append(ph_ind)
+                        Z_ohms_per_mi[np.ix_(ph_inds,ph_inds)] = Z_Kron
+                    else:
+                        raise ValueError(f"Need to parse conductor and spacing data for underground lines.")
                 else:
                     Z_ohms_per_mi = np.array([[branch_config.z11,branch_config.z12,branch_config.z13],
                                               [branch_config.z21,branch_config.z22,branch_config.z23],
@@ -170,9 +210,9 @@ class PowerSystemModel:
                 from_node_name = branch.from_node
                 to_node_name = branch.to_node
                 if from_node_name not in self.Node_Dict:
-                    from_node_name = find_node_parent(from_node_name,self.Node_Dict,self.Shunt_Dict)
+                    from_node_name = find_node_parent(from_node_name,self.Node_Dict,self.Load_Dict,self.Generator_Dict,self.Shunt_Dict)
                 if to_node_name not in self.Node_Dict:
-                    to_node_name = find_node_parent(to_node_name,self.Node_Dict,self.Shunt_Dict)
+                    to_node_name = find_node_parent(to_node_name,self.Node_Dict,self.Load_Dict,self.Generator_Dict,self.Shunt_Dict)
                 from_node = self.Node_Dict[from_node_name]
                 to_node = self.Node_Dict[to_node_name]
                 if from_node.Vbase != to_node.Vbase:
@@ -198,9 +238,9 @@ class PowerSystemModel:
                 from_node_name = branch.from_node
                 to_node_name = branch.to_node
                 if from_node_name not in self.Node_Dict:
-                    from_node_name = find_node_parent(from_node_name,self.Node_Dict,self.Shunt_Dict)
+                    from_node_name = find_node_parent(from_node_name,self.Node_Dict,self.Load_Dict,self.Generator_Dict,self.Shunt_Dict)
                 if to_node_name not in self.Node_Dict:
-                    to_node_name = find_node_parent(to_node_name,self.Node_Dict,self.Shunt_Dict)
+                    to_node_name = find_node_parent(to_node_name,self.Node_Dict,self.Load_Dict,self.Generator_Dict,self.Shunt_Dict)
                 from_node = self.Node_Dict[from_node_name]
                 to_node = self.Node_Dict[to_node_name]
                 branch.Vbp_ln = from_node.Vbase
@@ -446,6 +486,11 @@ class Config:
             self.distanceBE = params[7] 
             self.distanceCE = params[8] 
             self.distanceDE = params[9] 
+
+        elif self.type in ["overhead_line_conductor"]:
+            self.gmr = params[0] 
+            self.resistance = params[1] 
+            self.diameter = params[2] 
 
         elif self.type in ["transformer_configuration"]:
             self.connect_type = params[0] 

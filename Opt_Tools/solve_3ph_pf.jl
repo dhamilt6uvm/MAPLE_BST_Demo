@@ -18,7 +18,7 @@ pushfirst!(pyimport("sys")."path", "")
 pyimport("GLM_Tools")
 
 # Load the .pkl file 
-substation_name = "Burton_Hill_DanR"
+substation_name = "IEEE_13_Node"
 fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model.pkl"
 # try
 pkl_file = pyopen(fname, "rb")
