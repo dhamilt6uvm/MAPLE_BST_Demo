@@ -5,7 +5,13 @@
 import pandas as pd
 import numpy as np
 import pickle
-import re
+import sys
+import os
+# os.system('clear')
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) # Get the directory one level up from the script
+sys.path.insert(0, parent_dir)  # Add the parent directory to the system path   
+import GLM_Tools.PowerSystemModel as psm # Now import the package
+
 
 substation_name = "Burton_Hill_small02" # change this to the substation you want to use
 phase = 'B'  # change this to the phase you want to use - A, B, or C (need a single phase for now)
