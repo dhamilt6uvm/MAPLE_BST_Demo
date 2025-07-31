@@ -11,10 +11,20 @@ using LinearAlgebra
 using CSV
 using DataFrames
 
-function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
+function create_model(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
 
+    # get network info
     n_nodes = length(psm.Nodes)
     n_branches = length(psm.Branches)
+
+    # find number of delta-connected loads (need to create additional variables for delta currents)
+    n_loads_D = 0
+    for Load in psm.Loads
+        if occursin("D", Load.phases)
+            global n_loads_D
+            n_loads_D = n_loads_D + 1
+        end
+    end
 
     # Model Setup
     model = Model(Ipopt.Optimizer)
@@ -32,13 +42,25 @@ function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linea
     @variable(model, Vph_imag[ph=1:3,1:n_nodes], start=imag(V0_ref[ph]*exp(-im*pi/6)))
     @variable(model, Iph_real[1:3,1:n_branches], start=0)
     @variable(model, Iph_imag[1:3,1:n_branches], start=0)
+    @variable(model, Iload_D_real[1:3,1:n_loads_D], start=0)
+    @variable(model, Iload_D_imag[1:3,1:n_loads_D], start=0)
 
     set_start_value.(Vph_real[:,1], real(V0_ref))
     set_start_value.(Vph_imag[:,1], imag(V0_ref))
 
+    # Parameter Definitions
+    @variable(model, s_load_Y_real[1:3,1:n_nodes] in Parameter(0.0))
+    @variable(model, s_load_Y_imag[1:3,1:n_nodes] in Parameter(0.0))
+    @variable(model, s_gen_real[1:3,1:n_nodes] in Parameter(0.0))
+    @variable(model, s_gen_imag[1:3,1:n_nodes] in Parameter(0.0))
+
     # Complex Variable Expressions
     @expression(model, Vph, Vph_real.+im*Vph_imag)
     @expression(model, Iph, Iph_real.+im*Iph_imag)
+    @expression(model, Iload_D, Iload_D_real.+im*Iload_D_imag)
+
+    @expression(model, s_load_Y_param, s_load_Y_real.+im*s_load_Y_imag)
+    @expression(model, s_gen_param, s_gen_real.+im*s_gen_imag)
 
     # Substation Voltage Constraint
     @constraint(model, Vph[:,1] .== V0_ref)
@@ -65,16 +87,40 @@ function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linea
 
 
     # Power Injection Constraints
-    s_load = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
+    t_ind = 1
+    s_load_Y = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
+    s_load_D = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
+    gamma_D = [[1.0 -1.0 0.0];[0.0 1.0 -1.0];[-1.0 0.0 1.0]]
+    delta_node_ind = 1
     for (ld_ind, Load) in enumerate(psm.Loads)
         if haskey(Load,"Sload")
-            s_load[:,Load.parent_node_ind+1] += Load.Sload[t_ind,:]
+            parent_node_ind = Load.parent_node_ind+1
+            if occursin("N", Load.phases)
+                # s_load_Y[:,parent_node_ind] += Load.Sload[t_ind,:]
+                temp_s_load_Y_real = parameter_value.(s_load_Y_real[:,parent_node_ind])
+                temp_s_load_Y_imag = parameter_value.(s_load_Y_imag[:,parent_node_ind])
+                set_parameter_value.(s_load_Y_real[:,parent_node_ind], temp_s_load_Y_real+real(Load.Sload[t_ind,:]))
+                set_parameter_value.(s_load_Y_imag[:,parent_node_ind], temp_s_load_Y_imag+imag(Load.Sload[t_ind,:]))
+                # s_load_Y[:,parent_node_ind] += Load.Sload[t_ind,:]
+            elseif occursin("D", Load.phases)
+                @constraint(model, diag(gamma_D*Vph[:,parent_node_ind]*Iload_D[:,delta_node_ind]') .== Load.Sload[t_ind,:])
+                # @constraint(model, diag(gamma_D*Vph[:,parent_node_ind]*Iload_D[:,delta_node_ind]') .== zeros(3,1))
+                s_load_D[:,parent_node_ind] += diag(Vph[:,parent_node_ind]*Iload_D[:,delta_node_ind]'*gamma_D)
+                global delta_node_ind
+                delta_node_ind = delta_node_ind + 1
+            else
+                throw(ArgumentError("Can't determine if Load $(Load.name) is wye or delta connected."))
+            end
         end
     end
     s_gen = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
     for (gen_ind, Gen) in enumerate(psm.Generators)
         if haskey(Gen,"Sgen")
-            s_gen[:,Gen.parent_node_ind+1] += Gen.Sgen[t_ind,:]
+            parent_node_ind = Gen.parent_node_ind+1
+            temp_s_gen_real = parameter_value.(s_gen_real[:,parent_node_ind])
+            temp_s_gen_imag = parameter_value.(s_gen_imag[:,parent_node_ind])
+            set_parameter_value.(s_gen_real[:,parent_node_ind], temp_s_gen_real+real(Gen.Sgen[t_ind,:]))
+            set_parameter_value.(s_gen_imag[:,parent_node_ind], temp_s_gen_imag+imag(Gen.Sgen[t_ind,:]))
         end
     end
     for (sht_ind, Shunt) in enumerate(psm.Shunts)
@@ -90,15 +136,63 @@ function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linea
                 status[3] = 1
             end
             parent_node_ind = Shunt.parent_node_ind+1
-            s_load[:,parent_node_ind] += status.*diag(Vph[:,parent_node_ind]*Vph[:,parent_node_ind]'*conj(Shunt.Ycap))
+            s_load_Y[:,parent_node_ind] += status.*diag(Vph[:,parent_node_ind]*Vph[:,parent_node_ind]'*conj(Shunt.Ycap))
         end
     end
-    @constraint(model, pb_rhs[:,2:end] - pb_lhs[:,2:end] .== s_gen[:,2:end]-s_load[:,2:end])
+    # @constraint(model, pb_rhs[:,2:end] - pb_lhs[:,2:end] .== s_gen[:,2:end]-s_load_Y[:,2:end]-s_load_D[:,2:end])
+    s_load_Y += s_load_Y_param
+    s_gen += s_gen_param
+    @constraint(model, pb_rhs[:,2:end] - pb_lhs[:,2:end] .== s_gen[:,2:end]-s_load_Y[:,2:end]-s_load_D[:,2:end])
+
+
+    # store some expressions for later
+    model.ext[:pb_lhs] = pb_lhs
+    model.ext[:pb_rhs] = pb_rhs
+
+    return model
+
+end
+
+function solve_pf(model::Model, psm::PyObject, t_ind::Int64)
+
+    n_nodes = length(psm.Nodes)
+    n_branches = length(psm.Branches)
+
+    set_parameter_value.(model[:s_load_Y_real], zeros(3,n_nodes))
+    set_parameter_value.(model[:s_load_Y_imag], zeros(3,n_nodes))
+    set_parameter_value.(model[:s_gen_real], zeros(3,n_nodes))
+    set_parameter_value.(model[:s_gen_imag], zeros(3,n_nodes))
+
+    for (ld_ind, Load) in enumerate(psm.Loads)
+        if haskey(Load,"Sload")
+            parent_node_ind = Load.parent_node_ind+1
+            if occursin("N", Load.phases)
+                # s_load_Y[:,parent_node_ind] += Load.Sload[t_ind,:]
+                temp_s_load_Y_real = parameter_value.(model[:s_load_Y_real][:,parent_node_ind])
+                temp_s_load_Y_imag = parameter_value.(model[:s_load_Y_imag][:,parent_node_ind])
+                set_parameter_value.(model[:s_load_Y_real][:,parent_node_ind], temp_s_load_Y_real+real(Load.Sload[t_ind,:]))
+                set_parameter_value.(model[:s_load_Y_imag][:,parent_node_ind], temp_s_load_Y_imag+imag(Load.Sload[t_ind,:]))
+                # s_load_Y[:,parent_node_ind] += Load.Sload[t_ind,:]
+            elseif occursin("D", Load.phases)
+                throw(ArgumentError("TODO: Add delta loads as parameters."))
+            else
+                throw(ArgumentError("Can't determine if Load $(Load.name) is wye or delta connected."))
+            end
+        end
+    end
+
+    for (gen_ind, Gen) in enumerate(psm.Generators)
+        if haskey(Gen,"Sgen")
+            parent_node_ind = Gen.parent_node_ind+1
+            temp_s_gen_real = parameter_value.(s_gen_real[:,parent_node_ind])
+            temp_s_gen_imag = parameter_value.(s_gen_imag[:,parent_node_ind])
+            set_parameter_value.(s_gen_real[:,parent_node_ind], temp_s_gen_real+real(Gen.Sgen[t_ind,:]))
+            set_parameter_value.(s_gen_imag[:,parent_node_ind], temp_s_gen_imag+imag(Gen.Sgen[t_ind,:]))
+        end
+    end
 
     optimize!(model)
-
-    return value.(Vph), value.(pb_rhs[:,1]-pb_lhs[:,1])
-
+    return value.(model[:Vph]), value.(model.ext[:pb_rhs][:,1]-model.ext[:pb_lhs][:,1])
 end
 
 ############################################################################################
@@ -122,15 +216,19 @@ n_branches = length(psm.Branches)
 V0_mag = 1
 V0_ref = V0_mag*[1,exp(-im*2*pi/3),exp(im*2*pi/3)]
 
+# Create model
+linear_solver = "mumps"
+pf_model = create_model(psm, V0_ref, t_ind, linear_solver)
+
 # solve power flow
 t_start = 1
 t_end = 169
+# t_end = 5
 n_times = t_end-t_start+1
-linear_solver = "mumps"
 Vph_out = Array{ComplexF64}(undef, 3, n_nodes, n_times)
 Ssub_out = Array{ComplexF64}(undef, 3, n_times)
 for t_ind in t_start:t_end
-    Vph_out[:,:,t_ind], Ssub_out[:,t_ind] = solve_pf(psm, V0_ref, t_ind, linear_solver)
+    Vph_out[:,:,t_ind], Ssub_out[:,t_ind] = solve_pf(pf_model, psm, t_ind)
 end
 
 ##
