@@ -11,6 +11,9 @@ using LinearAlgebra
 using CSV
 using DataFrames
 
+# measure time taken
+start_time = time()
+
 ##### Function for running power flow ########
 function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
 
@@ -27,6 +30,7 @@ function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linea
     else
         throw(ArgumentError("linear_solver $linear_solver not supported."))
     end
+    set_optimizer_attribute(model, "print_level", 0)
 
     # Variable Definitions
     @variable(model, Vph_real[ph=1:3,1:n_nodes], start=real(V0_ref[ph]*exp(-im*pi/6)))
@@ -98,6 +102,19 @@ function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linea
 
     optimize!(model)
 
+    # print status
+    status = termination_status(model)
+    if status in [MOI.OPTIMAL, MOI.LOCALLY_SOLVED]
+        print(".")
+    else
+        println("Solver did not find an optimal solution: $status")
+    end
+    # if status == MOI.OPTIMAL
+    #     println("Success")
+    # else
+    #     println("Solver did not find an optimal solution: $status")
+    # end
+
     return value.(Vph)#, value.(pb_rhs[:,1]-pb_lhs[:,1])
 
 end
@@ -134,10 +151,13 @@ V0_ref = V0_mag*[1,exp(-im*2*pi/3),exp(im*2*pi/3)]
 # find how many cases to solve
 t_start = 1
 t_end = size(psm_day.Loads[1].Sload,1)  # assuming all loads have the same number of time steps
+nloads = 210
+ngens = 30
+# println(t_end)
 
-nloads = 4#210              # delete all this and fix      
-ngens = 2#30
-t_end = nloads*2 + ngens*2
+# nloads = 4#210              # delete all this and fix      
+# ngens = 2#30
+# t_end = nloads*4 + ngens*4
 
 # solve power flow for day and night
 n_times = t_end-t_start+1
@@ -146,12 +166,20 @@ Vph_out_day = Array{Float64}(undef, n_nodes, n_times)
 for t_ind in t_start:t_end
     Vtmp = solve_pf(psm_day, V0_ref, t_ind, linear_solver)
     Vph_out_day[:,t_ind] = abs.(Vtmp[ph_col,:])
+    if t_ind%50 == 0
+        println("Finished $(t_ind) ops in Day")
+    end
 end
+println("Finished day-time ops")
 Vph_out_night = Array{Float64}(undef, n_nodes, n_times)
 for t_ind in t_start:t_end
     Vtmp = solve_pf(psm_night, V0_ref, t_ind, linear_solver)
     Vph_out_night[:,t_ind] = abs.(Vtmp[ph_col,:])
+    if t_ind%50 == 0
+        println("Finished $(t_ind) ops in Night")
+    end
 end
+println("Finished night-time ops")
 
 # figure out epsilon
 epsilon = abs(psm_day.Loads[1].Sload[1,2] - psm_day.Loads[1].Sload[2,2])
@@ -176,3 +204,28 @@ end
 # use the function to get jacobians
 dVdP_day, dVdQ_day = separate_jacobians(Vph_out_day, nloads, ngens, epsilon)
 dVdP_night, dVdQ_night = separate_jacobians(Vph_out_night, nloads, ngens, epsilon)
+
+# measure time taken to run:
+end_time = time()
+elap = round(end_time - start_time, digits=2)
+println("Elapsed time: $(elap) seconds")        # expect around 430 seconds
+
+# to save variables after completion, run this in REPL terminal:
+"""
+using Serialization
+serialize("BH_small02_Jacobians00.jls", (dVdP_day, dVdQ_day, dVdP_night, dVdQ_night))
+"""
+# to load in next script
+"""
+using Serialization
+dVdP_day, dVdQ_day, dVdP_night, dVdQ_night = deserialize("BH_small02_Jacobians00.jls")
+"""
+
+## Next steps: 
+# check how well the linear approximation matches real solutions:
+#       need jacobians for both day and night
+#       need the base loading conditions (x0 = Pl0, Ql0, Pg0, Qg0)
+#       choose a random subset of the loading conditions from the year (100x of them?)
+#       solve with linear, solve with BST   
+#       plot compare
+# fmincon on jacobian... 
