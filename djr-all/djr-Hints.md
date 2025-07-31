@@ -8,4 +8,7 @@
 `psm.<tab>`   
 
 - Get basic info on a psm  
-`psm`
+`psm`   
+  
+- See type of defined variable  
+`typeof(x)`
