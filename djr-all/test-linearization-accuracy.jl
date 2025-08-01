@@ -14,6 +14,7 @@ using LinearAlgebra
 using CSV
 using DataFrames
 using Random
+using Serialization
 hasattr = pyimport("builtins").hasattr
 # @pyimport matplotlib.pyplot as plt
 
@@ -120,11 +121,6 @@ function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linea
     else
         println("Solver did not find an optimal solution: $status")
     end
-    # if status == MOI.OPTIMAL
-    #     println("Success")
-    # else
-    #     println("Solver did not find an optimal solution: $status")
-    # end
 
     return value.(Vph)#, value.(pb_rhs[:,1]-pb_lhs[:,1])
 end
@@ -157,30 +153,30 @@ psm_night.Loads[1].Sload[1,ph_col] -= epsilon
 
 ## Determine initial conditions for day and night loading from PKL files ##################
 # extract Sload and Sgen
-function gather_loads(psm, ph_col)          # gather loads out of psm
+function gather_loads(psm, t_ind, ph_col)          # gather loads out of psm
     Sload = []
     for load in psm.Loads
         if hasattr(load, "Sload")
-            push!(Sload, load.Sload[1,ph_col])
+            push!(Sload, load.Sload[t_ind,ph_col])
         end
     end
     return Sload
 end
-function gather_gens(psm, ph_col)          # gather gens out of psm
+function gather_gens(psm, t_ind, ph_col)          # gather gens out of psm
     Sgen = []
     for gen in psm.Generators
         if hasattr(gen, "Sgen")
-            push!(Sgen, gen.Sgen[1,ph_col])
+            push!(Sgen, gen.Sgen[t_ind,ph_col])
         end
     end
     return Sgen
 end
 
 # find initial conditions of injections (day/night averages) from psm's
-Sload0_day = gather_loads(psm_day, ph_col)
-Sgen0_day = gather_gens(psm_day, ph_col)
-Sload0_night = gather_loads(psm_night, ph_col)
-Sgen0_night = gather_gens(psm_night, ph_col)
+Sload0_day = gather_loads(psm_day, 1, ph_col)
+Sgen0_day = gather_gens(psm_day, 1, ph_col)
+Sload0_night = gather_loads(psm_night, 1, ph_col)
+Sgen0_night = gather_gens(psm_night, 1, ph_col)
 
 # find initial voltages at these averaged conditions 
 Vph0_day = solve_pf(psm_day, V0_ref, 1, linear_solver)
@@ -197,16 +193,16 @@ pkl_file.close()
 ## Choose random subset of loading conditions #############################################
 nsamp = size(psm.Loads[1].Sload,1)      # determine number of loading conditions
 shuff = shuffle(1:nsamp)                # shuffle them
-ntest = 100                             # pick the first ntest of them to use
+ntest = 5                             # pick the first ntest of them to use
 test_idx = shuff[1:ntest]
 
 
 ## Determine if condition is day or night #################################################
 day_hours = 12:24
 night_hours = 1:11
-is_day = []
-for idx in test_idx[1:10]
-    hour = mod(idx,24)
+is_day = Bool[]
+for idx in test_idx
+    hour = mod1(idx,24)
     if hour in day_hours
         push!(is_day, true)
     elseif hour in night_hours
@@ -216,13 +212,51 @@ for idx in test_idx[1:10]
     end
 end
 
-# ## Solve power-flow with BST
+## Solve power-flow with BST ##############################################################
+nnodes = length(psm.Nodes)
+V_bst = zeros(Float64, ntest, nnodes)
+for (ii, t_ind) in enumerate(test_idx)
+    Vtmp = solve_pf(psm, V0_ref, t_ind, linear_solver)
+    V_bst[ii,:] = abs.(Vtmp[ph_col,:])
+end
 
-# ## Solve power-flow with linearization
-# # import jacobians
-# y_lin = y0 + J*(x-x0)
 
-## Compare solutions
+## Solve power-flow with linearization ####################################################
+# import jacobians
+dVdP_day, dVdQ_day, dVdP_night, dVdQ_night = deserialize("djr-all/BH_small02_Jacobians00.jls")
+# init voltage storage
+V_lin = zeros(Float64, ntest, nnodes)
+# loop and compute
+for (ii, t_ind) in enumerate(test_idx)
+    # decide day or night values
+    if is_day[ii]
+        Sload0 = Sload0_day
+        Sgen0 = Sgen0_day
+        V0 = abs.(Vph0_day[ph_col,:])
+        dVdP = dVdP_day
+        dVdQ = dVdQ_day
+    else
+        Sload0 = Sload0_night
+        Sgen0 = Sgen0_night
+        V0 = abs.(Vph0_night[ph_col,:])
+        dVdP = dVdP_night
+        dVdQ = dVdQ_night
+    end
+    # pull load and gen values for specific loading condition
+    Sload_t = gather_loads(psm, t_ind, ph_col)
+    Sgen_t = gather_gens(psm, t_ind, ph_col)
+    # Separate S into P/Q 
+    dSload = Sload_t - Sload0
+    dSgen = Sgen_t - Sgen0
+    dP = vcat(real(dSload), real(dSgen))
+    dQ = vcat(imag(dSload), imag(dSgen))
+    # Compute linearized voltage
+    V_lin[ii,:] = V0 + dVdP * dP + dVdQ * dQ
+end
+
+
+## Compare solutions ######################################################################
+# make a python plot, need to figure out best way to do this... 
 
 
 # plotting example:
