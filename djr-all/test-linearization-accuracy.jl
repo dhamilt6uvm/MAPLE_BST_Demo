@@ -1,3 +1,6 @@
+## Compare performance of linearized power flow to actual BST solutions
+##############################################################################
+## Import packages etc. 
 using PyCall
 using SparseArrays
 using Plots
@@ -10,11 +13,19 @@ using Ipopt
 using LinearAlgebra
 using CSV
 using DataFrames
+using Random
+hasattr = pyimport("builtins").hasattr
+# @pyimport matplotlib.pyplot as plt
 
-# measure time taken
-start_time = time()
+# include("BST_funcs.jl")         # BST function: value.(Vph) = solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
 
-##### Function for running power flow ########
+# Import Python modules
+pickle = pyimport("pickle")
+pyopen = pyimport("builtins").open
+pushfirst!(pyimport("sys")."path", "")
+pyimport("GLM_Tools")
+
+## BST Function: ##########################################################################
 function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
 
     n_nodes = length(psm.Nodes)
@@ -116,20 +127,14 @@ function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linea
     # end
 
     return value.(Vph)#, value.(pb_rhs[:,1]-pb_lhs[:,1])
-
 end
+## Set up for function use: 
+V0_mag = 1                          # substation voltage
+V0_ref = V0_mag*[1,exp(-im*2*pi/3),exp(im*2*pi/3)]
+linear_solver = "mumps"
 
-############################################################################################
 
-# Import Python modules
-pickle = pyimport("pickle")
-pushfirst!(pyimport("sys")."path", "")
-pyimport("GLM_Tools")
-
-# phase?
-ph_col = 2      # phase = B
-
-# Load the .pkl files for day and night time
+## Load the .pkl files for day and night time #############################################
 substation_name = "Burton_Hill_small02"
 fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model_DAY.pkl"
 pkl_file = pyopen(fname, "rb")
@@ -140,87 +145,91 @@ pkl_file = pyopen(fname, "rb")
 psm_night = pickle.load(pkl_file)
 pkl_file.close()
 
-# determine num of nodes and branches
-n_nodes = length(psm_day.Nodes)
-n_branches = length(psm_day.Branches)
+ph_col = 2          # phase B
 
-# Substation Voltage
-V0_mag = 1
-V0_ref = V0_mag*[1,exp(-im*2*pi/3),exp(im*2*pi/3)]
 
-# find how many cases to solve
-t_start = 1
-t_end = size(psm_day.Loads[1].Sload,1)  # assuming all loads have the same number of time steps
-nloads = 210
-ngens = 30
+## Shift PSMs for day and night so that t_ind=1 is the average ############################
+# determine epsilon (which was used to calculate jacobian numerically)
+epsilon = abs(psm_day.Loads[1].Sload[1,ph_col] - psm_day.Loads[1].Sload[2,ph_col])
+# subtract epsilon from first load in both
+psm_day.Loads[1].Sload[1,ph_col] -= epsilon
+psm_night.Loads[1].Sload[1,ph_col] -= epsilon
 
-# solve power flow for day and night
-n_times = t_end-t_start+1
-linear_solver = "mumps"
-Vph_out_day = Array{Float64}(undef, n_nodes, n_times)
-for t_ind in t_start:t_end
-    Vtmp = solve_pf(psm_day, V0_ref, t_ind, linear_solver)
-    Vph_out_day[:,t_ind] = abs.(Vtmp[ph_col,:])
-    if t_ind%50 == 0
-        println("Finished $(t_ind) ops in Day")
+## Determine initial conditions for day and night loading from PKL files ##################
+# extract Sload and Sgen
+function gather_loads(psm, ph_col)          # gather loads out of psm
+    Sload = []
+    for load in psm.Loads
+        if hasattr(load, "Sload")
+            push!(Sload, load.Sload[1,ph_col])
+        end
+    end
+    return Sload
+end
+function gather_gens(psm, ph_col)          # gather gens out of psm
+    Sgen = []
+    for gen in psm.Generators
+        if hasattr(gen, "Sgen")
+            push!(Sgen, gen.Sgen[1,ph_col])
+        end
+    end
+    return Sgen
+end
+
+# find initial conditions of injections (day/night averages) from psm's
+Sload0_day = gather_loads(psm_day, ph_col)
+Sgen0_day = gather_gens(psm_day, ph_col)
+Sload0_night = gather_loads(psm_night, ph_col)
+Sgen0_night = gather_gens(psm_night, ph_col)
+
+# find initial voltages at these averaged conditions 
+Vph0_day = solve_pf(psm_day, V0_ref, 1, linear_solver)
+Vph0_night = solve_pf(psm_night, V0_ref, 1, linear_solver)
+
+
+## Load the .pkl file for all data ########################################################
+fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model.pkl"
+pkl_file = pyopen(fname, "rb")
+psm = pickle.load(pkl_file)
+pkl_file.close()
+
+
+## Choose random subset of loading conditions #############################################
+nsamp = size(psm.Loads[1].Sload,1)      # determine number of loading conditions
+shuff = shuffle(1:nsamp)                # shuffle them
+ntest = 100                             # pick the first ntest of them to use
+test_idx = shuff[1:ntest]
+
+
+## Determine if condition is day or night #################################################
+day_hours = 12:24
+night_hours = 1:11
+is_day = []
+for idx in test_idx[1:10]
+    hour = mod(idx,24)
+    if hour in day_hours
+        push!(is_day, true)
+    elseif hour in night_hours
+        push!(is_day, false)
+    else
+        println("Error, hour not in either set")
     end
 end
-println("Finished day-time ops")
-Vph_out_night = Array{Float64}(undef, n_nodes, n_times)
-for t_ind in t_start:t_end
-    Vtmp = solve_pf(psm_night, V0_ref, t_ind, linear_solver)
-    Vph_out_night[:,t_ind] = abs.(Vtmp[ph_col,:])
-    if t_ind%50 == 0
-        println("Finished $(t_ind) ops in Night")
-    end
-end
-println("Finished night-time ops")
 
-# figure out epsilon
-epsilon = abs(psm_day.Loads[1].Sload[1,2] - psm_day.Loads[1].Sload[2,2])
+# ## Solve power-flow with BST
 
-# break up voltages into appropriate blocks to eventually get dVdP and dVdQ for both day and night (probably make functions)
-function separate_jacobians(Vph, nloads, ngens, epsilon)
-    # compute indices of each matrix
-    idx_l = [(i*nloads + 1):(i+1)*nloads for i in 0:3] 
-    idx_g = [(4*nloads + i*ngens + 1):(4*nloads + (i+1)*ngens) for i in 0:3]
-    # compute the centered numerical derivative
-    dV_loads_dP = ( Vph[:,idx_l[1]] - Vph[:,idx_l[2]] ) / (2*epsilon)
-    dV_loads_dQ = ( Vph[:,idx_l[3]] - Vph[:,idx_l[4]] ) / (2*epsilon)
-    dV_gens_dP = ( Vph[:,idx_g[1]] - Vph[:,idx_g[2]] ) / (2*epsilon)
-    dV_gens_dQ = ( Vph[:,idx_g[3]] - Vph[:,idx_g[4]] ) / (2*epsilon)
-    # concat into dP and dQ
-    dVdP = hcat(dV_loads_dP, dV_gens_dP)
-    dVdQ = hcat(dV_loads_dQ, dV_gens_dQ)
+# ## Solve power-flow with linearization
+# # import jacobians
+# y_lin = y0 + J*(x-x0)
 
-    return dVdP, dVdQ
-end
+## Compare solutions
 
-# use the function to get jacobians
-dVdP_day, dVdQ_day = separate_jacobians(Vph_out_day, nloads, ngens, epsilon)
-dVdP_night, dVdQ_night = separate_jacobians(Vph_out_night, nloads, ngens, epsilon)
 
-# measure time taken to run:
-end_time = time()
-elap = round(end_time - start_time, digits=2)
-println("Elapsed time: $(elap) seconds")        # expect around 430 seconds
-
-# to save variables after completion, run this in REPL terminal:
-"""
-using Serialization
-serialize("BH_small02_Jacobians00.jls", (dVdP_day, dVdQ_day, dVdP_night, dVdQ_night))
-"""
-# to load in next script
-"""
-using Serialization
-dVdP_day, dVdQ_day, dVdP_night, dVdQ_night = deserialize("BH_small02_Jacobians00.jls")
-"""
-
-## Next steps: 
-# check how well the linear approximation matches real solutions:
-#       need jacobians for both day and night
-#       need the base loading conditions (x0 = Pl0, Ql0, Pg0, Qg0)
-#       choose a random subset of the loading conditions from the year (100x of them?)
-#       solve with linear, solve with BST   
-#       plot compare
-# fmincon on jacobian... 
+# plotting example:
+# x = collect(1:10)
+# y = rand(0:9,10)
+# plt.plot(x,y,linewidth=2,label="xy")
+# plt.xlabel("x")
+# plt.ylabel("y")
+# plt.legend()
+# plt.show()

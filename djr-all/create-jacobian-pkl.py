@@ -39,7 +39,7 @@ for load in pkl_model.Loads:
 # determine time indices to pull for day/night
 idx_day = []                        # initialize empty lists for day and night indices
 idx_night = []
-day_hrs = np.arange(11,24)                      # actual hours to use - adjust if needed, based on VisualizeLoadsGens.py
+day_hrs = np.arange(11,23)                      # actual hours to use - adjust if needed, based on VisualizeLoadsGens.py
 night_hrs = np.arange(0,11)
 idx_samples = np.arange(num_samples)            # create an array of sample indices
 hr_of_day = idx_samples % 24                    # determine hour of day for each sample
