@@ -15,8 +15,9 @@ using CSV
 using DataFrames
 using Random
 using Serialization
+using LinearAlgebra
 hasattr = pyimport("builtins").hasattr
-# @pyimport matplotlib.pyplot as plt
+@pyimport matplotlib.pyplot as plt
 
 # include("BST_funcs.jl")         # BST function: value.(Vph) = solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
 
@@ -193,7 +194,7 @@ pkl_file.close()
 ## Choose random subset of loading conditions #############################################
 nsamp = size(psm.Loads[1].Sload,1)      # determine number of loading conditions
 shuff = shuffle(1:nsamp)                # shuffle them
-ntest = 5                             # pick the first ntest of them to use
+ntest = 100                             # pick the first ntest of them to use
 test_idx = shuff[1:ntest]
 
 
@@ -256,14 +257,28 @@ end
 
 
 ## Compare solutions ######################################################################
-# make a python plot, need to figure out best way to do this... 
-
-
-# plotting example:
-# x = collect(1:10)
-# y = rand(0:9,10)
-# plt.plot(x,y,linewidth=2,label="xy")
-# plt.xlabel("x")
-# plt.ylabel("y")
-# plt.legend()
-# plt.show()
+# compute norms
+dV_inorm = zeros(Float64, ntest)
+dV_2norm = zeros(Float64, ntest)
+# colors = String[]
+for ii in axes(V_lin,1)
+    Vdiff = V_lin[ii,:] - V_bst[ii,:]
+    dV_inorm[ii] = norm(Vdiff, Inf)
+    dV_2norm[ii] = 1/ntest*norm(Vdiff, 2)      # normalized for vector size (number of nodes)
+    # # set Colors
+    # if is_day[ii]
+    #     colors[ii] = "red"
+    # else
+    #     colors[ii] = "blue"
+    # end
+end
+# plot norms
+fig, axs = plt.subplots(2, 1, figsize=(10, 8))
+axs[1].scatter(test_idx, dV_2norm, s=10)#, c=colors)
+axs[2].scatter(test_idx, dV_inorm, s=10)
+axs[1].set_xlabel("Hour of Year")
+axs[2].set_xlabel("Hour of Year")
+axs[1].set_ylabel("2-norm")
+axs[2].set_ylabel("Inf Norm")
+plt.tight_layout()
+plt.show()
