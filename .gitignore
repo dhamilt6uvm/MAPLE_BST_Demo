@@ -173,3 +173,6 @@ gridlabd.xml
 
 # Exclude Feeder_Data folder
 Feeder_Data/
+
+# Exclude feeder specific HELICS runner files
+*_cosim_runner.json
