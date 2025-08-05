@@ -3,7 +3,7 @@ import GLM_Tools.parsing_tools as glm_parser
 import GLM_Tools.modif_tools as glm_modif_tools
 import os
 
-substation_name = "Burton_Hill"
+substation_name = "Burton_Hill_AllWye"
 
 # Meter Number Dictionary Settings
 build_meter_dicts_flag = False # Set this to False if you already built these CSV files
@@ -31,7 +31,7 @@ regulator_control = "MANUAL" # use "DEFAULT" to not change regulator controls
 
 # Optimization Settings
 add_ami_to_pkl_flag = True
-add_inv_rating_to_pkl_flag = True
+add_inv_rating_to_pkl_flag = False
 
 # Visualization Settings
 add_coords_to_pkl_flag = True
