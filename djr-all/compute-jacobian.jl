@@ -216,6 +216,19 @@ using Serialization
 dVdP_day, dVdQ_day, dVdP_night, dVdQ_night = deserialize("BH_small02_Jacobians00.jls")
 """
 
+# Convert Jacobians to DataFrame and save them
+function save_data(A, name)
+    df = DataFrame(A, :auto)
+    CSV.write("$name.csv", df)
+end
+if false
+    save_data(dVdP_day, "dVdP_day_BHsmall02")
+    save_data(dVdQ_day, "dVdQ_day_BHsmall02")
+    save_data(dVdP_night, "dVdP_night_BHsmall02")
+    save_data(dVdQ_night, "dVdQ_night_BHsmall02")
+end
+
+
 ## Next steps: 
 # check how well the linear approximation matches real solutions:
 #       need jacobians for both day and night

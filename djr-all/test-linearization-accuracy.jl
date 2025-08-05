@@ -278,3 +278,50 @@ axs[1].set_ylabel("2-norm")
 axs[2].set_ylabel("Inf Norm")
 plt.tight_layout()
 plt.show()
+
+
+## Save variables to csv
+# Convert to DataFrame and save them
+function save_data(A, name)
+    if isa(A,Vector)
+        df = DataFrame(A = A)
+    else
+        df = DataFrame(A, :auto)
+    end
+    CSV.write("$name.csv", df)
+end
+function comp_to_arr(v)             # convert complex vector to array of real and imaginary components
+    return hcat(real(v), imag(v))
+end
+save_vars = true
+if save_vars
+    save_data(abs.(Vph0_day[ph_col,:]), "Vph0_day_BHsmall02")       # save existing stuff
+    save_data(abs.(Vph0_night[ph_col,:]), "Vph0_night_BHsmall02")
+    save_data(comp_to_arr(Sload0_day), "Sload0_day_BHsmall02")
+    save_data(comp_to_arr(Sgen0_day), "Sgen0_day_BHsmall02")
+    save_data(comp_to_arr(Sload0_night), "Sload0_night_BHsmall02")
+    save_data(comp_to_arr(Sgen0_night), "Sgen0_night_BHsmall02")
+    Sload_day = gather_loads(psm, 15, ph_col)                       # pull out an operating condition from PSM to save
+    Sgen_day = gather_gens(psm, 15, ph_col)
+    Sload_night = gather_loads(psm, 5, ph_col)
+    Sgen_night = gather_gens(psm, 5, ph_col)
+    save_data(comp_to_arr(Sload_day), "Sload_day_BHsmall02")        # save those operating conditions
+    save_data(comp_to_arr(Sgen_day), "Sgen_day_BHsmall02")
+    save_data(comp_to_arr(Sload_night), "Sload_night_BHsmall02")
+    save_data(comp_to_arr(Sgen_night), "Sgen_night_BHsmall02")
+    # determine what nodes have Generators and loads
+    gen_idx = []
+    for gen in psm.Generators
+        if hasattr(gen, "Sgen")
+            push!(gen_idx, gen.parent_node_ind)
+        end
+    end
+    load_idx = []
+    for load in psm.Loads
+        if hasattr(load, "Sload")
+            push!(load_idx, load.parent_node_ind)
+        end
+    end
+    save_data(gen_idx,"gen_index_BHsmall02")
+    save_data(load_idx,"load_index_BHsmall02")
+end
