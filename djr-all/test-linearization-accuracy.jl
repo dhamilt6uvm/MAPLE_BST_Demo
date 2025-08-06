@@ -324,4 +324,36 @@ if save_vars
     end
     save_data(gen_idx,"gen_index_BHsmall02")
     save_data(load_idx,"load_index_BHsmall02")
+    # determine net load at nodes - for averages
+    function get_gen_netload(psm, nodes, ph_col, t_ind)
+    netload = zeros(Float64, nodes, 2)
+    for gen in psm.Generators               # loop through day gens
+        if hasattr(gen, "Sgen")                 
+            idx = gen.parent_node_ind + 1          # pull out parent node and make 1-indexed
+            netload[idx,:] += [real(gen.Sgen[t_ind, ph_col]), imag(gen.Sgen[t_ind, ph_col])]      # sub in the real and imaginary components
+        end
+    end
+    return netload
+    end
+    function get_netload(psm, nodes, ph_col, t_ind)
+    netload = get_gen_netload(psm, nodes, ph_col, t_ind)
+    for load in psm.Loads               # loop through day gens
+        if hasattr(load, "Sload")                 
+            idx = load.parent_node_ind  + 1        # pull out parent node and make 1-indexed
+            netload[idx,:] -= [real(load.Sload[t_ind, ph_col]), imag(load.Sload[t_ind, ph_col])]      # sub in the real and imaginary components
+        end
+    end
+    return netload
+    end
+    netload_day = get_netload(psm_day, 1072, ph_col, 1)
+    netload_night = get_netload(psm_night, 1072, ph_col, 1)
+    save_data(netload_day,"netload_day_BHsmall02")
+    save_data(netload_night,"netload_night_BHsmall02")
+    # determine net load at nodes - for specific conditions
+    netload_day_op = get_netload(psm, 1072, ph_col, 15)
+    netload_night_op = get_netload(psm, 1072, ph_col, 5)
+    save_data(netload_day,"netload_day_op_BHsmall02")
+    save_data(netload_night,"netload_night_op_BHsmall02")
 end
+
+

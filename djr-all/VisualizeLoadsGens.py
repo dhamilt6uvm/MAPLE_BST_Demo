@@ -36,7 +36,7 @@ loadidx, loadday, loadhour, loadvals = extract_data(fploads)
 
 ## Plot data
 # scatter subplot of load and generation data
-fig, axs = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+fig, axs = plt.subplots(2, 1, figsize=(5, 4), sharex=True)
 # Generation/Load data scatter
 for i in range(genvals.shape[1]):
     axs[0].scatter(genhour, genvals[:, i], label=f'Gen {i+1}', s=10, alpha=0.01, color='blue')
@@ -55,7 +55,7 @@ axs[0].set_xlabel('Hour')
 axs[1].set_xlabel('Hour')
 axs[0].set_ylabel('Generation')
 axs[1].set_ylabel('Load')
-# axs[1].set_ylim(0, 2)
+axs[1].set_ylim(0, 2)
 plt.tight_layout()
 plt.show()
 
