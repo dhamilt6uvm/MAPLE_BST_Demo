@@ -293,7 +293,7 @@ end
 function comp_to_arr(v)             # convert complex vector to array of real and imaginary components
     return hcat(real(v), imag(v))
 end
-save_vars = true
+save_vars = false
 if save_vars
     save_data(abs.(Vph0_day[ph_col,:]), "Vph0_day_BHsmall02")       # save existing stuff
     save_data(abs.(Vph0_night[ph_col,:]), "Vph0_night_BHsmall02")
