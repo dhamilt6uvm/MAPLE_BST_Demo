@@ -124,12 +124,3 @@ if false
     save_data(dVdP_night, "dVdP_night_BHsmall02")
     save_data(dVdQ_night, "dVdQ_night_BHsmall02")
 end
-
-# to create new system: 
-# n = 1072 (nodes)
-# j = 209 (nodes with load, gen, or both)
-# need jxj dV/dP and jxj dV/dQ
-# isolate the 209 nodes with loads
-# find the average NET loads at those important nodes
-# make day and night pkl's with Sload 209 (x4 +- and P/Q) long and Sgen unchanged (provided there are no nodes with just gen)
-# use this compute jacobians script to get the jacobians out
