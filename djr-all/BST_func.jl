@@ -105,11 +105,6 @@ function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linea
     else
         println("Solver did not find an optimal solution: $status")
     end
-    # if status == MOI.OPTIMAL
-    #     println("Success")
-    # else
-    #     println("Solver did not find an optimal solution: $status")
-    # end
 
     return value.(Vph)#, value.(pb_rhs[:,1]-pb_lhs[:,1])
 
