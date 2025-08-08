@@ -3,7 +3,7 @@ import GLM_Tools.parsing_tools as glm_parser
 import GLM_Tools.modif_tools as glm_modif_tools
 import os
 
-substation_name = "Burton_Hill"
+substation_name = "Burton_Hill_AllWye"
 
 # Meter Number Dictionary Settings
 build_meter_dicts_flag = False # Set this to False if you already built these CSV files
@@ -31,6 +31,7 @@ regulator_control = "MANUAL" # use "DEFAULT" to not change regulator controls
 
 # Optimization Settings
 add_ami_to_pkl_flag = True
+add_inv_rating_to_pkl_flag = False
 
 # Visualization Settings
 add_coords_to_pkl_flag = True
@@ -73,6 +74,11 @@ if add_ami_to_pkl_flag:
     print(f"Populating pkl file with AMI data...")
     glm_parser.populate_ami_loads_pkl(substation_name, sim_start_time, sim_end_time, ami_load_fixed_pf)
     print(f"Done populating pkl file with AMI data.")
+
+if add_inv_rating_to_pkl_flag:
+    print(f"Populating pkl file with inverter ratings...")
+    glm_parser.populate_inv_ratings_pkl(substation_name)
+    print(f"Done populating pkl file with inverter ratings data.")
 
 if add_coords_to_pkl_flag:    
     print(f"Populating pkl file with coordinate data...")

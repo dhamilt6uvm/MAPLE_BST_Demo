@@ -667,6 +667,78 @@ def populate_ami_loads_pkl(substation_name, start_date, end_date, load_fixed_pf)
     with open(pkl_file, 'wb') as file:
         pickle.dump(pkl_model, file)
 
+def populate_inv_ratings_pkl(substation_name):
+
+    substation_dict = {"South_Alburgh":"28",
+                       "South_Hero":"29",
+                       "Burton_Hill":"43"}
+
+    if substation_name in substation_dict:
+        substation_number = substation_dict[substation_name]
+    else:
+        raise ValueError(f"Substation name \"{substation_name}\" not recognized. Valid substation names are: {list(substation_dict.keys())}")
+    
+    # Open Generator GIS data
+    gis_gen_fname = f"Feeder_Data/VEC_GIS_Data/gs_generator073025.json"
+    with open(gis_gen_fname, 'r') as file:
+        gis_gen_data = json.load(file)
+
+    # Parse GIS generator data and build dictionary
+    gen_object_ids = []
+    gen_system_types = []
+    gen_sizes = []
+    gen_phases = []
+
+    for feature in gis_gen_data["features"]:
+        attributes = feature["attributes"]
+        gs_substation = attributes["gs_substation"]
+        if gs_substation == substation_number:
+            object_id = attributes["OBJECTID"]
+            gs_system_type = attributes["gs_system_type"]
+            gs_generator_system_size = attributes["gs_generator_system_size"]
+            gs_phase = attributes["gs_phase"]
+
+            gen_object_ids.append(object_id)
+            gen_system_types.append(gs_system_type)
+            gen_sizes.append(gs_generator_system_size)
+            gen_phases.append(gs_phase)
+
+    # Create DataFrame and write to CSV
+    gen_data = pd.DataFrame({
+        "Object ID": gen_object_ids,
+        "System Type": gen_system_types,
+        "Phase": gen_phases,
+        "System Size (kVA)": gen_sizes
+    })
+
+    gen_data.to_csv(f"Feeder_Data/{substation_name}/generator_sizes.csv", index=False)
+
+    # Open pkl file
+    pkl_file = f"Feeder_Data/{substation_name}/Python_Model/{substation_name}_Model.pkl"
+    with open(pkl_file, 'rb') as file:
+        pkl_model = pickle.load(file)
+
+    for Gen in pkl_model.Generators:
+        object_id_match = re.search(r"gene_([0-9]*)_negLdGen", Gen.name, re.S)
+        if object_id_match:
+            object_id = int(object_id_match.group(1))
+            if object_id in gen_object_ids:
+                ind = gen_object_ids.index(object_id)
+                gen_size = gen_sizes[ind]
+                if gen_size is not None:
+                    Gen.Srated = float(gen_sizes[ind])
+                else:
+                    Gen.Srated = None
+            else:
+                raise ValueError(f"Could not find generator in GIS: {object_id}")
+        else:
+            raise ValueError(f"Could not find object_id of generator object: {Gen.name}")
+
+
+    # Save updated pkl file
+    with open(pkl_file, 'wb') as file:
+        pickle.dump(pkl_model, file)
+
 
 def add_coords_to_pkl(substation_name):
 

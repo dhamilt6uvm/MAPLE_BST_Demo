@@ -33,7 +33,6 @@ V0_ref = V0_mag*[1.0,exp(-im*2*pi/3),exp(im*2*pi/3)]
 
 # Model Setup
 model = Model(Ipopt.Optimizer)
-model = Model(Ipopt.Optimizer)
 linear_solver = "ma57"
 if linear_solver in ["ma27","ma57","ma77","ma86","ma97"]
     set_attribute(model, "hsllib", HSL_jll.libhsl_path)
@@ -83,7 +82,7 @@ end
 
 
 # Power Injection Constraints
-t_ind = 10
+t_ind = 30
 s_load = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
 for (ld_ind, Load) in enumerate(psm.Loads)
     if haskey(Load,"Sload")
