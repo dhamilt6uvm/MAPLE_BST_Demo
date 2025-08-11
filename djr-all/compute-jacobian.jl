@@ -10,36 +10,54 @@ using Ipopt
 using LinearAlgebra
 using CSV
 using DataFrames
-
+hasattr = pyimport("builtins").hasattr
 include("BST_func.jl")         # BST function: value.(Vph) = solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
+# Import Python modules
+pickle = pyimport("pickle")
+pyopen = pyimport("builtins").open
+pushfirst!(pyimport("sys")."path", "")
+pyimport("GLM_Tools")
 
 # measure time taken
 start_time = time()
 
+save_new_jacobs = false         # change this to save results
 ############################################################################################
-
-# Import Python modules
-pickle = pyimport("pickle")
-pushfirst!(pyimport("sys")."path", "")
-pyimport("GLM_Tools")
 
 # phase?
 ph_col = 2      # phase = B
 
 # Load the .pkl files for day and night time
 substation_name = "Burton_Hill_small02"
-fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model_DAY.pkl"
+fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model_DAY1.pkl"
 pkl_file = pyopen(fname, "rb")
 psm_day = pickle.load(pkl_file)
 pkl_file.close()
-fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model_NIGHT.pkl"
+fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model_NIGHT1.pkl"
 pkl_file = pyopen(fname, "rb")
 psm_night = pickle.load(pkl_file)
 pkl_file.close()
 
-# determine num of nodes and branches
-n_nodes = length(psm_day.Nodes)
-n_branches = length(psm_day.Branches)
+# determine num of nodes
+nodes = Int[]               # unique nodes with a load or a gen
+# Extract nodes with load/gen/both
+for load in psm_day.Loads
+    if hasattr(load, :Sload)
+        ind = load.parent_node_ind
+        if !(ind in nodes)
+            push!(nodes, ind)
+        end
+    end
+end
+for gen in psm_day.Generators
+    if hasattr(gen, :Sgen)
+        ind = gen.parent_node_ind
+        if !(ind in nodes)
+            push!(nodes, ind)
+        end
+    end
+end
+nloads = length(nodes)
 
 # Substation Voltage
 V0_mag = 1
@@ -48,8 +66,10 @@ V0_ref = V0_mag*[1,exp(-im*2*pi/3),exp(im*2*pi/3)]
 # find how many cases to solve
 t_start = 1
 t_end = size(psm_day.Loads[1].Sload,1)  # assuming all loads have the same number of time steps
-nloads = 210
-ngens = 30
+# nloads = 210
+# ngens = 30
+
+return
 
 # solve power flow for day and night
 n_times = t_end-t_start+1
@@ -118,7 +138,7 @@ function save_data(A, name)
     df = DataFrame(A, :auto)
     CSV.write("$name.csv", df)
 end
-if false
+if save_new_jacobs
     save_data(dVdP_day, "dVdP_day_BHsmall02")
     save_data(dVdQ_day, "dVdQ_day_BHsmall02")
     save_data(dVdP_night, "dVdP_night_BHsmall02")

@@ -24,7 +24,7 @@ import GLM_Tools.PowerSystemModel as psm # Now import the package
 
 substation_name = "Burton_Hill_small02" # change this to the substation you want to use
 phase = 'B'                 # change this to the phase you want to use - A, B, or C (need a single phase for now)
-check_out = True           # set to True to check the output of the jacobian pkl files via printing statements at the end
+check_out = False           # set to True to check the output of the jacobian pkl files via printing statements at the end
 
 ## Import pkl file  ########################################################################
 # load the file in
@@ -96,8 +96,8 @@ for gen in pkl_model.Generators:
             loads_avg_night.append(-1*avg_night)                            # " "
             node_idx_map[ind] = len(loads_avg_day) - 1                      # add mapping
 # convert to np arrays and flip sign (gen positive, load negative)
-loads_avg_day = -1 * np.array(loads_avg_day)                     # convert to numpy array
-loads_avg_night = -1 * np.array(loads_avg_night)                 # convert to numpy array
+loads_avg_day = np.array(loads_avg_day)                     # convert to numpy array
+loads_avg_night = np.array(loads_avg_night)                 # convert to numpy array
 
 
 ## Perturb the data to create jacobian loading #############################################
@@ -156,7 +156,7 @@ def save_jacobian_pkl(pkl_model, new_file_name, load_data, ph_col):
             ind = load.parent_node_ind
             load.Sload = np.zeros([load_data.shape[0],3], dtype=complex)    # initialize Sload with zeros
             if ind not in node_idx_map:
-                load.Sload[:,ph_col] = -load_data[:,ct]                     # overwrite the Sload value with jacobian stuff - need minus to get back to positive sign convention
+                load.Sload[:,ph_col] = load_data[:,ct]                      # overwrite the Sload value with jacobian stuff
                 node_idx_map[ind] = ct                                      # store the mapping to not repeat
                 ct += 1                                                     # index the count
     # loop over gens
@@ -165,7 +165,7 @@ def save_jacobian_pkl(pkl_model, new_file_name, load_data, ph_col):
             ind = gen.parent_node_ind
             gen.Sgen = np.zeros([load_data.shape[0],3], dtype=complex)      # initialize Sgen with zeros
             if ind not in node_idx_map:
-                gen.Sgen[:,ph_col] = load_data[:,ct]                        # overwrite the Sload value with jacobian stuff
+                gen.Sgen[:,ph_col] = -load_data[:,ct]                       # overwrite the Sgen value with jacobian stuff (minus because gen vals should be positive when gen-ing)
                 node_idx_map[ind] = ct                                      # store the mapping to not repeat
                 ct += 1                                                     # index the count
     # save the modified model
@@ -183,7 +183,7 @@ save_jacobian_pkl(pkl_model, pkl_file_night, load_night, ph_col)
 
 ## Make sure that it worked ##############################################################
 if check_out:
-    n_checks = 5
+    n_checks = 3
     # load the files back in and check the data
     with open(pkl_file_day, 'rb') as file:
         pkl_model_day = pickle.load(file)
@@ -192,33 +192,48 @@ if check_out:
 
     print("Checking the Jacobian pkl files...")
     print("Day time model:")
+    print("===Expect real component + eps on the diagonal, shape is nnodes*4 x 3")
     ii = 0
     for load in pkl_model_day.Loads:
         if hasattr(load, 'Sload'):
-            print(f"Load {load.name}, #{ii}, Sload: {load.Sload[:n_checks,ph_col]}")
+            if ii == 0:
+                print(load.Sload.shape) 
+            print(f"Load {load.name}, #{ii}, Sload:") 
+            print(load.Sload[:n_checks,ph_col])
             ii += 1
-            if ii > n_checks: break
+            if ii >= n_checks: break
+    print("===Expect real component - eps on the diagonal")
+    ii = 0
+    for load in pkl_model_day.Loads:
+        if hasattr(load, 'Sload'):
+            print(f"Load {load.name}, #{ii}, Sload:")
+            print(load.Sload[nloads:nloads+n_checks,ph_col])
+            ii += 1
+            if ii >= n_checks: break
+    print("===Expect complex component + eps on the diagonal")
+    ii = 0
+    for load in pkl_model_day.Loads:
+        if hasattr(load, 'Sload'):
+            print(f"Load {load.name}, #{ii}, Sload:") 
+            print(load.Sload[2*nloads:2*nloads+n_checks,ph_col])
+            ii += 1
+            if ii >= n_checks: break
+    print("===Expect complex component - eps on the diagonal")
+    ii = 0
+    for load in pkl_model_day.Loads:
+        if hasattr(load, 'Sload'):
+            print(f"Load {load.name}, #{ii}, Sload:") 
+            print(load.Sload[3*nloads:3*nloads+n_checks,ph_col])
+            ii += 1
+            if ii >= n_checks: break
+    print("===Expect 0's unless there are nodes with only gens, size should be 4*nnodes x 3")
     ii = 0
     for gen in pkl_model_day.Generators:
         if hasattr(gen, 'Sgen'):
-            print(f"Gen {gen.name}, #{ii}, Sgen: {gen.Sgen[4*nloads:4*nloads+n_checks,ph_col]}")
+            if ii == 0:
+                print(gen.Sgen.shape)
+            print(f"Gen {gen.name}, #{ii}, Sgen:")
+            print(gen.Sgen[:n_checks,ph_col])
             ii += 1
             if ii > n_checks: break
-    print("Night time model:")
-    ii = 0
-    for load in pkl_model_night.Loads:  
-        if hasattr(load, 'Sload'):
-            print(f"Load {load.name}, #{ii}, Sload: {load.Sload[:n_checks,ph_col]}")
-            ii += 1
-            if ii > n_checks: break
-    ii = 0
-    for gen in pkl_model_night.Generators:
-        if hasattr(gen, 'Sgen'):
-            print(f"Gen {gen.name}, #{ii}, Sgen: {gen.Sgen[4*nloads:4*nloads+n_checks,ph_col]}")
-            ii += 1
-            if ii > n_checks: break
-
-
-
-## We're real close here brother - need to check the outputs for correctness - Sgen should definitely not be empty
-# also need to make sure that when "adding" epsilon, we're going the right way for all of them... wouldn't want a sign-convention screw up
+    # add more checks as needed
