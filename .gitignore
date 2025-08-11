@@ -179,3 +179,6 @@ Feeder_Data/Burton_Hill_small01/Config_Files/Burton_Hill_small01_ami_player_conf
 Feeder_Data/Burton_Hill_small00/Config_Files/Burton_Hill_small00_glm_fed_config.json
 Feeder_Data/Burton_Hill_small00/Config_Files/Burton_Hill_small00_ami_player_config.json
 Feeder_Data/Burton_Hill/Config_Files/Burton_Hill_glm_fed_config.json
+
+# Exclude feeder specific HELICS runner files
+*_cosim_runner.json

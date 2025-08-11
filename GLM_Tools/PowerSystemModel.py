@@ -54,6 +54,9 @@ class PowerSystemModel:
             node.outgoing_branches = []
             node.incoming_branches = []
             node.child_nodes = []
+            node.loads = []
+            node.gens = []
+            node.shunts = []
         
 
         self.Node_Dict = {obj.name: obj for obj in self.Nodes}
@@ -87,6 +90,8 @@ class PowerSystemModel:
             parent_name = load.parent
             parent_node = self.Node_Dict[parent_name]
             load.parent_node_ind = parent_node.index
+            # update load list in parent node
+            parent_node.loads.append(load.index)
             # convert Sload to per unit
             # load.Sload = load.Sload/self.Sbase_1ph
 
@@ -94,6 +99,8 @@ class PowerSystemModel:
             parent_name = gen.parent
             parent_node = self.Node_Dict[parent_name]
             gen.parent_node_ind = parent_node.index
+            # update gen list in parent node
+            parent_node.gens.append(gen.index)
             # convert Sgen to per unit
             # load.Sgen = load.Sgen/self.Sbase_1ph
 
@@ -101,6 +108,8 @@ class PowerSystemModel:
             parent_name = shunt.parent
             parent_node = self.Node_Dict[parent_name]
             shunt.parent_node_ind = parent_node.index
+            # update shunt list in parent node
+            parent_node.shunts.append(shunt.index)
 
         self.Load_Dict = {obj.name: obj for obj in self.Loads}
         self.Generator_Dict = {obj.name: obj for obj in self.Generators}

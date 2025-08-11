@@ -31,6 +31,7 @@ regulator_control = "MANUAL" # use "DEFAULT" to not change regulator controls
 
 # Optimization Settings
 add_ami_to_pkl_flag = True
+add_inv_rating_to_pkl_flag = False
 
 # Visualization Settings
 add_coords_to_pkl_flag = True
@@ -73,6 +74,11 @@ if add_ami_to_pkl_flag:
     print(f"Populating pkl file with AMI data...")
     glm_parser.populate_ami_loads_pkl(substation_name, sim_start_time, sim_end_time, ami_load_fixed_pf)
     print(f"Done populating pkl file with AMI data.")
+
+if add_inv_rating_to_pkl_flag:
+    print(f"Populating pkl file with inverter ratings...")
+    glm_parser.populate_inv_ratings_pkl(substation_name)
+    print(f"Done populating pkl file with inverter ratings data.")
 
 if add_coords_to_pkl_flag:    
     print(f"Populating pkl file with coordinate data...")
