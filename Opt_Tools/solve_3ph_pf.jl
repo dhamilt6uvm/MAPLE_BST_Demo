@@ -19,7 +19,7 @@ pushfirst!(pyimport("sys")."path", "")
 pyimport("GLM_Tools")
 
 # Load the .pkl file 
-substation_name = "Burton_Hill_DanR"
+substation_name = "Burton_Hill_small02"
 fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model.pkl"
 # try
 pkl_file = pyopen(fname, "rb")
@@ -242,17 +242,17 @@ plot!(title="Phase C",xformatter=:none,yformatter=:none,legend=:false,subplot=3)
 # heatmap!(rand(2,2), clims=(Vmin,Vmax),  right_margin = 10Plots.mm, framestyle=:none, c=node_colormap, cbar=true, lims=(-1,0),colorbar_title = " \nVoltage Magnitude (pu)",subplot=4)
 display(vis_plt)
 
-# colorbar plot - axis labels are cut off... 
-dummy_vals = reshape(range(Vmin, Vmax, length=100), :, 1)
-colorbar_plot = heatmap(
-    dummy_vals,
-    c=cgrad(:turbo),
-    axis=nothing,
-    colorbar=true,
-    size=(150, 400),
-    ticks=:native
-)
-display(colorbar_plot)
+# # colorbar plot - axis labels are cut off...  does work to create a colorbar in separate plot
+# dummy_vals = reshape(range(Vmin, Vmax, length=100), :, 1)
+# colorbar_plot = heatmap(
+#     dummy_vals,
+#     c=cgrad(:turbo),
+#     axis=nothing,
+#     colorbar=true,
+#     size=(150, 400),
+#     ticks=:native
+# )
+# display(colorbar_plot)
 
 # # single phase plot with colorbar - not currently working... :(
 # single_phase = "B"
