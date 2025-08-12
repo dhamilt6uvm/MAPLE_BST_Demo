@@ -38,30 +38,33 @@ pkl_file = pyopen(fname, "rb")
 psm_night = pickle.load(pkl_file)
 pkl_file.close()
 
-# determine num of nodes
-nodes = Int[]               # unique nodes with a load or a gen
-# nodes2 = Int[]               # unique nodes with a load or a gen
-# Extract nodes with load/gen/both
-# for (ii,node) in enumerate(psm_day.Nodes)
-#     print(node.loads)
-# end
-for load in psm_day.Loads
-    if hasattr(load, :Sload)
-        ind = load.parent_node_ind
-        if !(ind in nodes)
-            push!(nodes, ind)
+# determine num of nodes and extract unique ones
+function get_loadgen_nodes_LO(psm)
+    # returns list of unique nodes that have an Sload or Sgen attribute - 1-indexed! 
+    # returns length of that list
+    # note: (L)OAD (O)RDER node numbers are in the order they appear in when looping "for load in psm.Loads", then again with gens
+    nodes = Int[]               # unique nodes with a load or a gen
+    # Extract nodes with load/gen/both
+    for load in psm.Loads
+        if hasattr(load, :Sload)
+            ind = load.parent_node_ind
+            if !(ind in nodes)
+                push!(nodes, ind)
+            end
         end
     end
-end
-for gen in psm_day.Generators
-    if hasattr(gen, :Sgen)
-        ind = gen.parent_node_ind
-        if !(ind in nodes)
-            push!(nodes, ind)
+    for gen in psm.Generators
+        if hasattr(gen, :Sgen)
+            ind = gen.parent_node_ind
+            if !(ind in nodes)
+                push!(nodes, ind)
+            end
         end
     end
+    n_loads = length(nodes)
+    return nodes.+1, n_loads
 end
-n_loads = length(nodes)
+nodes, n_loads = get_loadgen_nodes_LO(psm_day)
 
 # Substation Voltage
 V0_mag = 1
@@ -131,3 +134,26 @@ if save_new_jacobs
     save_data(dVdP_night, "dVdP_night01_BHsmall02")
     save_data(dVdQ_night, "dVdQ_night01_BHsmall02")
 end
+
+
+
+
+
+# nodes = Int[]               # unique nodes with a load or a gen
+# for load in psm_day.Loads
+#     if hasattr(load, :Sload)
+#         ind = load.parent_node_ind
+#         if !(ind in nodes)
+#             push!(nodes, ind)
+#         end
+#     end
+# end
+# for gen in psm_day.Generators
+#     if hasattr(gen, :Sgen)
+#         ind = gen.parent_node_ind
+#         if !(ind in nodes)
+#             push!(nodes, ind)
+#         end
+#     end
+# end
+# n_loads = length(nodes)

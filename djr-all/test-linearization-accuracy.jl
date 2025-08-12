@@ -56,7 +56,7 @@ psm_night.Loads[1].Sload[1,ph_col] -= epsilon
 
 ## Find the unique nodes with loads or gens or both #####################################
 function get_loadgen_nodes(psm)
-    # returns list of unique nodes that have an Sload or Sgen attribute
+    # returns list of unique nodes that have an Sload or Sgen attribute - 1-indexed!
     # returns length of that list
     # note: node numbers are in numerical order, not necessarily in the order used by "for load in psm.Loads"
     nodes = Int[]
@@ -85,11 +85,11 @@ function get_loadgen_nodes(psm)
             end
         end
     end
-    return nodes, length(nodes)
+    return nodes.+1, length(nodes)
 end
 
 function get_loadgen_nodes_LO(psm)
-    # returns list of unique nodes that have an Sload or Sgen attribute
+    # returns list of unique nodes that have an Sload or Sgen attribute - 1-indexed! 
     # returns length of that list
     # note: (L)OAD (O)RDER node numbers are in the order they appear in when looping "for load in psm.Loads", then again with gens
     nodes = Int[]               # unique nodes with a load or a gen
@@ -111,7 +111,7 @@ function get_loadgen_nodes_LO(psm)
         end
     end
     n_loads = length(nodes)
-    return nodes, n_loads
+    return nodes.+1, n_loads
 end
 
 nodes, n_loads = get_loadgen_nodes_LO(psm_day)
@@ -121,7 +121,7 @@ nodes, n_loads = get_loadgen_nodes_LO(psm_day)
 function get_netload_onetime(psm, nodes, t_ind)
     n_loads = length(nodes)
     Sload_tind = zeros(ComplexF64, n_loads)
-    for (ii,node) in enumerate(psm.Nodes[nodes])            # loop over all supplied nodes (in supplied order)
+    for (ii,node) in enumerate(psm.Nodes[nodes])            # loop over all supplied nodes (in supplied order) - need plus one
         tmp = 0
         for load_ind in node.loads                          # loop over all loads at that node
             load = psm.Loads[load_ind+1]
@@ -221,10 +221,11 @@ end
 # compute norms
 dV_inorm = zeros(Float64, ntest)
 dV_2norm = zeros(Float64, ntest)
+Vdiff2 = V_lin - V_bst
 for ii in axes(V_lin,1)
     Vdiff = V_lin[ii,:] - V_bst[ii,:]
     dV_inorm[ii] = norm(Vdiff, Inf)
-    dV_2norm[ii] = 1/ntest*norm(Vdiff, 2)      # normalized for vector size (number of nodes)
+    dV_2norm[ii] = 1/sqrt(n_loads)*norm(Vdiff, 2)      # normalized for vector size (number of nodes)
 end
 mx = 1.01 * maximum(vcat(dV_2norm, dV_inorm))
 # plot norms
@@ -241,15 +242,7 @@ plt.tight_layout()
 plt.show()
 
 
-
-# need to figure out why it's so much worse
-#   debug steps:
-#   check that the voltages coming out of the linearization are reasonable
-#   check the linearization AT the operating point 
-#   check that the operating point voltages are reasonable 
-#   pull the old code and see if I see anyhting majorly different procedure wise? 
-
-## Save variables to csv
+## Save variables to csv ########################################################################
 # Convert to DataFrame and save them
 function save_data(A, name)
     if isa(A,Vector)

@@ -25,6 +25,7 @@ import GLM_Tools.PowerSystemModel as psm # Now import the package
 substation_name = "Burton_Hill_small02" # change this to the substation you want to use
 phase = 'B'                 # change this to the phase you want to use - A, B, or C (need a single phase for now)
 check_out = False           # set to True to check the output of the jacobian pkl files via printing statements at the end
+save_new_PKLs = False       # set to True to save new PKL files
 
 ## Import pkl file  ########################################################################
 # load the file in
@@ -95,9 +96,11 @@ for gen in pkl_model.Generators:
             loads_avg_day.append(-1*avg_day)                                # put average value in list of avgs
             loads_avg_night.append(-1*avg_night)                            # " "
             node_idx_map[ind] = len(loads_avg_day) - 1                      # add mapping
-# convert to np arrays and flip sign (gen positive, load negative)
+# convert to np arrays
 loads_avg_day = np.array(loads_avg_day)                     # convert to numpy array
 loads_avg_night = np.array(loads_avg_night)                 # convert to numpy array
+
+print(loads_avg_night[:,1])
 
 
 ## Perturb the data to create jacobian loading #############################################
@@ -173,13 +176,12 @@ def save_jacobian_pkl(pkl_model, new_file_name, load_data, ph_col):
         pickle.dump(pkl_model, file) 
     print(f"Saved Jacobian pkl file to {new_file_name}")
 
-# Day time model
+# Day/night time models
 pkl_file_day = f"Feeder_Data/{substation_name}/Python_Model/{substation_name}_Model_DAY1.pkl"
-save_jacobian_pkl(pkl_model, pkl_file_day, load_day, ph_col)
-# Night time model
 pkl_file_night = f"Feeder_Data/{substation_name}/Python_Model/{substation_name}_Model_NIGHT1.pkl"
-save_jacobian_pkl(pkl_model, pkl_file_night, load_night, ph_col)
-
+if save_new_PKLs:
+    save_jacobian_pkl(pkl_model, pkl_file_night, load_night, ph_col)
+    save_jacobian_pkl(pkl_model, pkl_file_day, load_day, ph_col)
 
 ## Make sure that it worked ##############################################################
 if check_out:
