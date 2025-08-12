@@ -16,10 +16,9 @@ using DataFrames
 using Random
 using Serialization
 using LinearAlgebra
+include("BST_func.jl")         # BST function: value.(Vph) = solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
 hasattr = pyimport("builtins").hasattr
 @pyimport matplotlib.pyplot as plt
-
-# include("BST_funcs.jl")         # BST function: value.(Vph) = solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
 
 # Import Python modules
 pickle = pyimport("pickle")
@@ -27,104 +26,6 @@ pyopen = pyimport("builtins").open
 pushfirst!(pyimport("sys")."path", "")
 pyimport("GLM_Tools")
 
-## BST Function: ##########################################################################
-function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
-
-    n_nodes = length(psm.Nodes)
-    n_branches = length(psm.Branches)
-
-    # Model Setup
-    model = Model(Ipopt.Optimizer)
-    if linear_solver in ["ma27","ma57","ma77","ma86","ma97"]
-        set_attribute(model, "hsllib", HSL_jll.libhsl_path)
-        set_attribute(model, "linear_solver", linear_solver)
-    elseif linear_solver == "mumps"
-        set_attribute(model, "linear_solver", linear_solver)
-    else
-        throw(ArgumentError("linear_solver $linear_solver not supported."))
-    end
-    set_optimizer_attribute(model, "print_level", 0)
-
-    # Variable Definitions
-    @variable(model, Vph_real[ph=1:3,1:n_nodes], start=real(V0_ref[ph]*exp(-im*pi/6)))
-    @variable(model, Vph_imag[ph=1:3,1:n_nodes], start=imag(V0_ref[ph]*exp(-im*pi/6)))
-    @variable(model, Iph_real[1:3,1:n_branches], start=0)
-    @variable(model, Iph_imag[1:3,1:n_branches], start=0)
-
-    set_start_value.(Vph_real[:,1], real(V0_ref))
-    set_start_value.(Vph_imag[:,1], imag(V0_ref))
-
-    # Complex Variable Expressions
-    @expression(model, Vph, Vph_real.+im*Vph_imag)
-    @expression(model, Iph, Iph_real.+im*Iph_imag)
-
-    # Substation Voltage Constraint
-    @constraint(model, Vph[:,1] .== V0_ref)
-
-    # Power Flow Constraints
-    pb_lhs = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
-    pb_rhs = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
-    for (br_ind,Branch) in enumerate(psm.Branches)
-        # skip open branches
-        if Branch.type == "switch" 
-            if Branch.status == "OPEN"
-                Iph[:,br_ind] .== 0.0
-                continue
-            end
-        end
-        from_node_ind = Branch.from_node_ind+1
-        to_node_ind = Branch.to_node_ind+1
-        # "Ohm's law"
-        @constraint(model, Vph[:,from_node_ind] .== Branch.A_br*Vph[:,to_node_ind] + Branch.B_br*Iph[:,br_ind])
-        # Add branch flows to power balance expressions
-        pb_lhs[:,to_node_ind] += diag(Vph[:,to_node_ind]*Iph[:,br_ind]')
-        pb_rhs[:,from_node_ind] += diag(Branch.A_br*Vph[:,to_node_ind]*Iph[:,br_ind]'*(Branch.D_br')+Branch.B_br*Iph[:,br_ind]*Iph[:,br_ind]'*(Branch.D_br'))
-    end
-
-
-    # Power Injection Constraints
-    s_load = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
-    for (ld_ind, Load) in enumerate(psm.Loads)
-        if haskey(Load,"Sload")
-            s_load[:,Load.parent_node_ind+1] += Load.Sload[t_ind,:]
-        end
-    end
-    s_gen = zeros(GenericQuadExpr{ComplexF64, VariableRef}, 3, n_nodes)
-    for (gen_ind, Gen) in enumerate(psm.Generators)
-        if haskey(Gen,"Sgen")
-            s_gen[:,Gen.parent_node_ind+1] += Gen.Sgen[t_ind,:]
-        end
-    end
-    for (sht_ind, Shunt) in enumerate(psm.Shunts)
-        if Shunt.type == "capacitor"
-            status = zeros(Int, 3, 1)
-            if Shunt.switchA == "CLOSED"
-                status[1] = 1
-            end
-            if Shunt.switchB == "CLOSED"
-                status[2] = 1
-            end
-            if Shunt.switchC == "CLOSED"
-                status[3] = 1
-            end
-            parent_node_ind = Shunt.parent_node_ind+1
-            s_load[:,parent_node_ind] += status.*diag(Vph[:,parent_node_ind]*Vph[:,parent_node_ind]'*conj(Shunt.Ycap))
-        end
-    end
-    @constraint(model, pb_rhs[:,2:end] - pb_lhs[:,2:end] .== s_gen[:,2:end]-s_load[:,2:end])
-
-    optimize!(model)
-
-    # print status
-    status = termination_status(model)
-    if status in [MOI.OPTIMAL, MOI.LOCALLY_SOLVED]
-        print(".")
-    else
-        println("Solver did not find an optimal solution: $status")
-    end
-
-    return value.(Vph)#, value.(pb_rhs[:,1]-pb_lhs[:,1])
-end
 ## Set up for function use: 
 V0_mag = 1                          # substation voltage
 V0_ref = V0_mag*[1,exp(-im*2*pi/3),exp(im*2*pi/3)]
@@ -133,11 +34,11 @@ linear_solver = "mumps"
 
 ## Load the .pkl files for day and night time #############################################
 substation_name = "Burton_Hill_small02"
-fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model_DAY.pkl"
+fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model_DAY1.pkl"
 pkl_file = pyopen(fname, "rb")
 psm_day = pickle.load(pkl_file)
 pkl_file.close()
-fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model_NIGHT.pkl"
+fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model_NIGHT1.pkl"
 pkl_file = pyopen(fname, "rb")
 psm_night = pickle.load(pkl_file)
 pkl_file.close()
@@ -152,32 +53,95 @@ epsilon = abs(psm_day.Loads[1].Sload[1,ph_col] - psm_day.Loads[1].Sload[2,ph_col
 psm_day.Loads[1].Sload[1,ph_col] -= epsilon
 psm_night.Loads[1].Sload[1,ph_col] -= epsilon
 
-## Determine initial conditions for day and night loading from PKL files ##################
-# extract Sload and Sgen
-function gather_loads(psm, t_ind, ph_col)          # gather loads out of psm
-    Sload = []
-    for load in psm.Loads
-        if hasattr(load, "Sload")
-            push!(Sload, load.Sload[t_ind,ph_col])
+
+## Find the unique nodes with loads or gens or both #####################################
+function get_loadgen_nodes(psm)
+    # returns list of unique nodes that have an Sload or Sgen attribute
+    # returns length of that list
+    # note: node numbers are in numerical order, not necessarily in the order used by "for load in psm.Loads"
+    nodes = Int[]
+    for node in psm.Nodes                                       # loop through all nodes 
+        idx = node.index + 1                                    # set node value (+1 b/c julia)
+        found = false                                           # havent found an Sload yet
+        if (length(node.loads) > 0 || length(node.gens) > 0) && idx ∉ nodes    # check if there are loads and if node already found 
+            for load_ind in node.loads                          # loop through all attached loads
+                load = psm.Loads[load_ind+1]                    # pull out appropriate load
+                if hasattr(load, "Sload")                       # check if that load has an Sload
+                    push!(nodes, idx)                           # add node index to the list
+                    found = true
+                    break
+                end
+            end
+            if found                                            # did find, don't bother checking gens
+                continue
+            end        
+            for gen_ind in node.gens                            # loop through all attached gens
+                gen = psm.Generators[gen_ind+1]                 # pull out appropriate gen
+                if hasattr(gen, "Sgen")                         # check if that gen has an Sgen
+                    push!(nodes, idx)                           # add node index to the list
+                    found = true
+                    break
+                end
+            end
         end
     end
-    return Sload
-end
-function gather_gens(psm, t_ind, ph_col)          # gather gens out of psm
-    Sgen = []
-    for gen in psm.Generators
-        if hasattr(gen, "Sgen")
-            push!(Sgen, gen.Sgen[t_ind,ph_col])
-        end
-    end
-    return Sgen
+    return nodes, length(nodes)
 end
 
-# find initial conditions of injections (day/night averages) from psm's
-Sload0_day = gather_loads(psm_day, 1, ph_col)
-Sgen0_day = gather_gens(psm_day, 1, ph_col)
-Sload0_night = gather_loads(psm_night, 1, ph_col)
-Sgen0_night = gather_gens(psm_night, 1, ph_col)
+function get_loadgen_nodes_LO(psm)
+    # returns list of unique nodes that have an Sload or Sgen attribute
+    # returns length of that list
+    # note: (L)OAD (O)RDER node numbers are in the order they appear in when looping "for load in psm.Loads", then again with gens
+    nodes = Int[]               # unique nodes with a load or a gen
+    # Extract nodes with load/gen/both
+    for load in psm.Loads
+        if hasattr(load, :Sload)
+            ind = load.parent_node_ind
+            if !(ind in nodes)
+                push!(nodes, ind)
+            end
+        end
+    end
+    for gen in psm.Generators
+        if hasattr(gen, :Sgen)
+            ind = gen.parent_node_ind
+            if !(ind in nodes)
+                push!(nodes, ind)
+            end
+        end
+    end
+    n_loads = length(nodes)
+    return nodes, n_loads
+end
+
+nodes, n_loads = get_loadgen_nodes_LO(psm_day)
+
+
+## Determine initial conditions for day and night loading from PKL files ##################
+function get_netload_onetime(psm, nodes, t_ind)
+    n_loads = length(nodes)
+    Sload_tind = zeros(ComplexF64, n_loads)
+    for (ii,node) in enumerate(psm.Nodes[nodes])            # loop over all supplied nodes (in supplied order)
+        tmp = 0
+        for load_ind in node.loads                          # loop over all loads at that node
+            load = psm.Loads[load_ind+1]
+            if hasattr(load, "Sload")                       # check that load has an Sload attribute
+                tmp += load.Sload[t_ind,ph_col]             # add up loads to temporary
+            end                                             # load is positive because load goes into BST positive
+        end
+        for gen_ind in node.gens                            # loop over all gens at node
+            gen = psm.Generators[gen_ind+1]
+            if hasattr(gen, "Sgen")
+                tmp -= gen.Sgen[t_ind,ph_col]               # subtract gen values from temp
+            end                                             # taking a load positive convention.. NEED TO LOOK AT THIS IF THERE ARE JUST GEN NODES
+        end
+        Sload_tind[ii] = tmp
+    end
+    return Sload_tind
+end
+# find initial conditions of injections (day/night averages) from psm's - will be used in linearized calculation
+Sload0_day = get_netload_onetime(psm_day, nodes, 1)
+Sload0_night = get_netload_onetime(psm_night, nodes, 1)
 
 # find initial voltages at these averaged conditions 
 Vph0_day = solve_pf(psm_day, V0_ref, 1, linear_solver)
@@ -213,44 +177,41 @@ for idx in test_idx
     end
 end
 
+
 ## Solve power-flow with BST ##############################################################
-nnodes = length(psm.Nodes)
-V_bst = zeros(Float64, ntest, nnodes)
+V_bst = zeros(Float64, ntest, n_loads)
 for (ii, t_ind) in enumerate(test_idx)
     Vtmp = solve_pf(psm, V0_ref, t_ind, linear_solver)
-    V_bst[ii,:] = abs.(Vtmp[ph_col,:])
+    V_bst[ii,:] = abs.(Vtmp[ph_col,nodes])
 end
 
 
 ## Solve power-flow with linearization ####################################################
 # import jacobians
-dVdP_day, dVdQ_day, dVdP_night, dVdQ_night = deserialize("djr-all/BH_small02_Jacobians00.jls")
+dVdP_day, dVdQ_day, dVdP_night, dVdQ_night = deserialize("djr-all/BH_small02_Jacobians01.jls")
 # init voltage storage
-V_lin = zeros(Float64, ntest, nnodes)
+V_lin = zeros(Float64, ntest, n_loads)
+
 # loop and compute
 for (ii, t_ind) in enumerate(test_idx)
     # decide day or night values
     if is_day[ii]
         Sload0 = Sload0_day
-        Sgen0 = Sgen0_day
-        V0 = abs.(Vph0_day[ph_col,:])
+        V0 = abs.(Vph0_day[ph_col,nodes])
         dVdP = dVdP_day
         dVdQ = dVdQ_day
     else
         Sload0 = Sload0_night
-        Sgen0 = Sgen0_night
-        V0 = abs.(Vph0_night[ph_col,:])
+        V0 = abs.(Vph0_night[ph_col,nodes])
         dVdP = dVdP_night
         dVdQ = dVdQ_night
     end
-    # pull load and gen values for specific loading condition
-    Sload_t = gather_loads(psm, t_ind, ph_col)
-    Sgen_t = gather_gens(psm, t_ind, ph_col)
+    # pull load values for specific loading condition
+    Sload_t = get_netload_onetime(psm, nodes, t_ind)
     # Separate S into P/Q 
     dSload = Sload_t - Sload0
-    dSgen = Sgen_t - Sgen0
-    dP = vcat(real(dSload), real(dSgen))
-    dQ = vcat(imag(dSload), imag(dSgen))
+    dP = real(dSload)
+    dQ = imag(dSload)
     # Compute linearized voltage
     V_lin[ii,:] = V0 + dVdP * dP + dVdQ * dQ
 end
@@ -279,6 +240,14 @@ axs[2].set_ylabel("Inf Norm")
 plt.tight_layout()
 plt.show()
 
+
+
+# need to figure out why it's so much worse
+#   debug steps:
+#   check that the voltages coming out of the linearization are reasonable
+#   check the linearization AT the operating point 
+#   check that the operating point voltages are reasonable 
+#   pull the old code and see if I see anyhting majorly different procedure wise? 
 
 ## Save variables to csv
 # Convert to DataFrame and save them
@@ -355,5 +324,3 @@ if save_vars
     save_data(netload_day,"netload_day_op_BHsmall02")
     save_data(netload_night,"netload_night_op_BHsmall02")
 end
-
-
