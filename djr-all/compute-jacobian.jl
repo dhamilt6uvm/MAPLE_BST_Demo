@@ -21,7 +21,7 @@ pyimport("GLM_Tools")
 # measure time taken
 start_time = time()
 
-save_new_jacobs = false         # change this to save results
+save_new_jacobs = true         # change this to save results
 ############################################################################################
 
 # phase?
@@ -112,16 +112,16 @@ end_time = time()
 elap = round(end_time - start_time, digits=2)
 println("Elapsed time: $(elap) seconds")        # expect around 430 seconds for ~2000 cases
 
-# # to save variables after completion, run this in REPL terminal:
-# """
-# using Serialization
-# serialize("BH_small02_Jacobians00.jls", (dVdP_day, dVdQ_day, dVdP_night, dVdQ_night))
-# """
-# # to load in next script
-# """
-# using Serialization
-# dVdP_day, dVdQ_day, dVdP_night, dVdQ_night = deserialize("BH_small02_Jacobians00.jls")
-# """
+# to save variables after completion, run this in REPL terminal:
+"""
+using Serialization
+serialize("BH_small02_Jacobians00.jls", (dVdP_day, dVdQ_day, dVdP_night, dVdQ_night))
+"""
+# to load in next script
+"""
+using Serialization
+dVdP_day, dVdQ_day, dVdP_night, dVdQ_night = deserialize("BH_small02_Jacobians00.jls")
+"""
 
 # Convert Jacobians to DataFrame and save them
 function save_data(A, name)
@@ -134,26 +134,3 @@ if save_new_jacobs
     save_data(dVdP_night, "dVdP_night01_BHsmall02")
     save_data(dVdQ_night, "dVdQ_night01_BHsmall02")
 end
-
-
-
-
-
-# nodes = Int[]               # unique nodes with a load or a gen
-# for load in psm_day.Loads
-#     if hasattr(load, :Sload)
-#         ind = load.parent_node_ind
-#         if !(ind in nodes)
-#             push!(nodes, ind)
-#         end
-#     end
-# end
-# for gen in psm_day.Generators
-#     if hasattr(gen, :Sgen)
-#         ind = gen.parent_node_ind
-#         if !(ind in nodes)
-#             push!(nodes, ind)
-#         end
-#     end
-# end
-# n_loads = length(nodes)

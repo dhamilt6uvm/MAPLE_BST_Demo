@@ -158,7 +158,7 @@ pkl_file.close()
 ## Choose random subset of loading conditions #############################################
 nsamp = size(psm.Loads[1].Sload,1)      # determine number of loading conditions
 shuff = shuffle(1:nsamp)                # shuffle them
-ntest = 200                             # pick the first ntest of them to use
+ntest = 5                             # pick the first ntest of them to use
 test_idx = shuff[1:ntest]
 
 
@@ -255,65 +255,42 @@ end
 function comp_to_arr(v)             # convert complex vector to array of real and imaginary components
     return hcat(real(v), imag(v))
 end
-save_vars = false
+save_vars = true
 if save_vars
-    save_data(abs.(Vph0_day[ph_col,:]), "Vph0_day_BHsmall02")       # save existing stuff
-    save_data(abs.(Vph0_night[ph_col,:]), "Vph0_night_BHsmall02")
-    save_data(comp_to_arr(Sload0_day), "Sload0_day_BHsmall02")
-    save_data(comp_to_arr(Sgen0_day), "Sgen0_day_BHsmall02")
-    save_data(comp_to_arr(Sload0_night), "Sload0_night_BHsmall02")
-    save_data(comp_to_arr(Sgen0_night), "Sgen0_night_BHsmall02")
-    Sload_day = gather_loads(psm, 15, ph_col)                       # pull out an operating condition from PSM to save
-    Sgen_day = gather_gens(psm, 15, ph_col)
-    Sload_night = gather_loads(psm, 5, ph_col)
-    Sgen_night = gather_gens(psm, 5, ph_col)
-    save_data(comp_to_arr(Sload_day), "Sload_day_BHsmall02")        # save those operating conditions
-    save_data(comp_to_arr(Sgen_day), "Sgen_day_BHsmall02")
-    save_data(comp_to_arr(Sload_night), "Sload_night_BHsmall02")
-    save_data(comp_to_arr(Sgen_night), "Sgen_night_BHsmall02")
-    # determine what nodes have Generators and loads
-    gen_idx = []
-    for gen in psm.Generators
-        if hasattr(gen, "Sgen")
-            push!(gen_idx, gen.parent_node_ind)
+    # op-point voltages
+    save_data(abs.(Vph0_day[ph_col,nodes]), "Vph0_day01_BHsmall02")       # save existing stuff
+    save_data(abs.(Vph0_night[ph_col,nodes]), "Vph0_night01_BHsmall02")
+    # op-point day/night of P and Q
+    save_data(comp_to_arr(Sload0_day), "S0_day01_BHsmall02")
+    save_data(comp_to_arr(Sload0_night), "S0_night01_BHsmall02")
+    # cases to test: x worst voltage deviations
+    tbl = CSV.File("Vdiff_idx_BHsmall02.csv")           # extract Sload from worst voltage cases using the saved csv
+    worst_V_idx = collect(tbl.A)
+    cases_to_get = 20
+    is_day_worst = Bool[]
+    Sload_worst = zeros(ComplexF64, cases_to_get, n_loads)
+    for (ii,t_ind) in enumerate(worst_V_idx[1:cases_to_get])
+        Sload_worst[ii,:] = get_netload_onetime(psm, nodes, t_ind)
+        hour = mod1(t_ind,24)
+        if hour in day_hours
+            push!(is_day_worst, true)
+        elseif hour in night_hours
+            push!(is_day_worst, false)
         end
     end
-    load_idx = []
-    for load in psm.Loads
-        if hasattr(load, "Sload")
-            push!(load_idx, load.parent_node_ind)
+    save_data(is_day_worst, "WorstCases_isday_BHsmall02")
+    save_data(comp_to_arr(Sload_worst), "S_01_BHsmall02")
+    # get list of indices that have generators
+    gen_idx_in_209 = []
+    for (ii,node) in enumerate(psm.Nodes[nodes])
+        if length(node.gens) > 0
+            for gen_ind in node.gens
+                gen = psm.Generators[gen_ind+1]
+                if hasattr(gen, "Sgen")
+                    push!(gen_idx_in_209, ii)
+                end
+            end
         end
     end
-    save_data(gen_idx,"gen_index_BHsmall02")
-    save_data(load_idx,"load_index_BHsmall02")
-    # determine net load at nodes - for averages
-    function get_gen_netload(psm, nodes, ph_col, t_ind)
-    netload = zeros(Float64, nodes, 2)
-    for gen in psm.Generators               # loop through day gens
-        if hasattr(gen, "Sgen")                 
-            idx = gen.parent_node_ind + 1          # pull out parent node and make 1-indexed
-            netload[idx,:] += [real(gen.Sgen[t_ind, ph_col]), imag(gen.Sgen[t_ind, ph_col])]      # sub in the real and imaginary components
-        end
-    end
-    return netload
-    end
-    function get_netload(psm, nodes, ph_col, t_ind)
-    netload = get_gen_netload(psm, nodes, ph_col, t_ind)
-    for load in psm.Loads               # loop through day gens
-        if hasattr(load, "Sload")                 
-            idx = load.parent_node_ind  + 1        # pull out parent node and make 1-indexed
-            netload[idx,:] -= [real(load.Sload[t_ind, ph_col]), imag(load.Sload[t_ind, ph_col])]      # sub in the real and imaginary components
-        end
-    end
-    return netload
-    end
-    netload_day = get_netload(psm_day, 1072, ph_col, 1)
-    netload_night = get_netload(psm_night, 1072, ph_col, 1)
-    save_data(netload_day,"netload_day_BHsmall02")
-    save_data(netload_night,"netload_night_BHsmall02")
-    # determine net load at nodes - for specific conditions
-    netload_day_op = get_netload(psm, 1072, ph_col, 15)
-    netload_night_op = get_netload(psm, 1072, ph_col, 5)
-    save_data(netload_day,"netload_day_op_BHsmall02")
-    save_data(netload_night,"netload_night_op_BHsmall02")
+    save_data(gen_idx_in_209, "genidx_in209_BHsmall02")
 end
