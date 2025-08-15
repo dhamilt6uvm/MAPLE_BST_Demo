@@ -27,7 +27,7 @@ GridSpecFromSubplotSpec = gridspec.GridSpecFromSubplotSpec
 
 show_plot = true
 show_hists = false
-check_global_opt = false
+check_global_opt = true
 
 ## Load the feeder ######################################################
 substation_name = "Burton_Hill_small02"
@@ -289,8 +289,13 @@ if show_plot
         plt.plot(x, v_b4, color=c, label="Samp $jj")
         plt.plot(x, v_vvc, color=c, linestyle="--")
     end
+    for idx in gen_idx_in_209
+        bar_height = abs(kvals[idx]) / maximum(abs.(kvals)) / 50
+        plt.plot([idx,idx],[0.92,0.92+bar_height],linewidth=4, color="red")
+    end
     plt.xlabel("Node Index")
     plt.ylabel("Voltage (pu)")
+    plt.grid(true)
     plt.show()
     # find nodes with high final voltage
     idx_sus = findall(row -> any(>(1), row), eachrow(vstar_all))
