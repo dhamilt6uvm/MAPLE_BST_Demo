@@ -222,8 +222,8 @@ Q_track = hcat(zeros(n_nodes), Q_track)
 iters = axes(Q_track, 2)   # iterations
 fig, axs = plt.subplots(2, 1, figsize=(8, 6))
 # Plot voltages
-for i in axes(V_track, 1)
-    axs[1].plot(iters, V_track[i, :])
+for node in nodes
+    axs[1].plot(iters, V_track[node, :])
 end
 axs[1].set_title("Voltage at each node")
 axs[1].set_xlabel("Iteration")
@@ -237,6 +237,9 @@ axs[2].set_xlabel("Iteration")
 axs[2].set_ylabel("Q output")
 plt.tight_layout()
 plt.show()
+
+
+# next steps - look for bugs and figure out why the response is so small
 
 
 # """

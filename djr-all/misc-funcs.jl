@@ -13,7 +13,7 @@ function get_loadgen_nodes_LO(psm)
     # Extract nodes with load/gen/both
     for load in psm.Loads
         if hasattr(load, :Sload)
-            ind = load.parent_node_ind
+            ind = load.parent_node_ind + 1          # parent_node_ind is 0-indx add 1
             if !(ind in nodes)
                 push!(nodes, ind)
             end
@@ -21,14 +21,14 @@ function get_loadgen_nodes_LO(psm)
     end
     for gen in psm.Generators
         if hasattr(gen, :Sgen)
-            ind = gen.parent_node_ind
+            ind = gen.parent_node_ind + 1           # parent_node_ind is 0-indx add 1
             if !(ind in nodes)
                 push!(nodes, ind)
             end
         end
     end
     n_loads = length(nodes)
-    return nodes.+1, n_loads
+    return nodes, n_loads
 end
 
 function get_netload_onetime(psm, nodes, t_ind, ph_col)
@@ -37,7 +37,7 @@ function get_netload_onetime(psm, nodes, t_ind, ph_col)
     for (ii,node) in enumerate(psm.Nodes[nodes])            # loop over all supplied nodes (in supplied order) - need plus one
         tmp = 0
         for load_ind in node.loads                          # loop over all loads at that node
-            load = psm.Loads[load_ind+1]
+            load = psm.Loads[load_ind+1]                    # plus one for 0-indx load_ind
             if hasattr(load, "Sload")                       # check that load has an Sload attribute
                 tmp += load.Sload[t_ind,ph_col]             # add up loads to temporary
             end                                             # load is positive because load goes into BST positive
@@ -74,7 +74,7 @@ function get_gen_idx(psm, nodes)
     for (ii,node) in enumerate(psm.Nodes[nodes])
         if length(node.gens) > 0
             for gen_ind in node.gens
-                gen = psm.Generators[gen_ind+1]
+                gen = psm.Generators[gen_ind+1]             # plus one for gen_ind being 0-indx
                 if hasattr(gen, "Sgen")
                     push!(gen_idx_in_loadgens, ii)
                 end
