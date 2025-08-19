@@ -3,7 +3,7 @@ module AllFuncs
 using PyCall
 const hasattr = pyimport("builtins").hasattr
 
-export get_loadgen_nodes_LO, get_netload_onetime, get_is_day, get_gen_idx
+export get_loadgen_nodes_LO, get_netload_onetime, get_is_day, get_gen_idx, write_netload_onetime
 
 function get_loadgen_nodes_LO(psm)
     # returns list of unique nodes that have an Sload or Sgen attribute - 1-indexed! 
@@ -82,6 +82,30 @@ function get_gen_idx(psm, nodes)
         end
     end
     return gen_idx_in_loadgens
+end
+
+function write_netload_onetime(psm, nodes, t_ind, Sload_all)
+    # input Sload is vector at the time index that is being modified
+    for (ii,node) in enumerate(psm.Nodes[nodes])            # loop over all supplied nodes (in supplied order) - need plus one
+        ct = 0                                              # count for if first load or not
+        for load_ind in node.loads                          # loop over all loads at that node
+            load = psm.Loads[load_ind+1]
+            if hasattr(load, "Sload")                       # check that load has an Sload attribute
+                if ct == 0                                  # if haven't overwritten any loads yet
+                    load.Sload[t_ind,ph_col] = Sload_all[ii]    # write the load to the Sload value
+                else
+                    load.Sload[t_ind,ph_col] = 0            # write any other loads to zero
+                end
+                ct += 1                                     # bump the counter
+            end                                             # load is positive because load goes into BST positive
+        end
+        for gen_ind in node.gens                            # loop over all gens at node
+            gen = psm.Generators[gen_ind+1]
+            if hasattr(gen, "Sgen")
+                gen.Sgen[t_ind,ph_col] = 0                  # write the gen value to 0 
+            end                                             # taking a load positive convention.. NEED TO LOOK AT THIS IF THERE ARE NODES W/ JUST GEN
+        end
+    end
 end
 
 end # end module
