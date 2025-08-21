@@ -17,11 +17,10 @@ pushfirst!(pyimport("sys")."path", "")
 pyimport("GLM_Tools")
 
 # Load the .pkl file 
-substation_name = "South_Alburgh"
+substation_name = "Burton_Hill"
 fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model.pkl"
-pkl_file = open(fname, "r")
-psm = pickle.load(pkl_file)
-close(pkl_file)
+pkl_file = read(fname)
+psm = pickle.loads(pkl_file)
 
 # get network info
 n_nodes = length(psm.Nodes)

@@ -13,20 +13,14 @@ using DataFrames
 
 # Import Python modules
 pickle = pyimport("pickle")
-pyopen = pyimport("builtins").open
 pushfirst!(pyimport("sys")."path", "")
 pyimport("GLM_Tools")
 
 # Load the .pkl file 
 substation_name = "Burton_Hill"
 fname = "Feeder_Data/$(substation_name)/Python_Model/$(substation_name)_Model.pkl"
-# try
-pkl_file = pyopen(fname, "rb")
-psm = pickle.load(pkl_file)
-pkl_file.close()
-# catch e
-#     showerror(stdout, e)
-# end
+pkl_file = read(fname)
+psm = pickle.loads(pkl_file)
 
 # get network info
 n_nodes = length(psm.Nodes)
