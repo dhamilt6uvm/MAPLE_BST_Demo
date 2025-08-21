@@ -2,8 +2,9 @@ module AllFuncs
 
 using PyCall
 const hasattr = pyimport("builtins").hasattr
+using JuMP
 
-export get_loadgen_nodes_LO, get_netload_onetime, get_is_day, get_gen_idx, write_netload_onetime
+export get_loadgen_nodes_LO, get_netload_onetime, get_is_day, get_gen_idx, write_netload_onetime, check_ip_solution
 
 function get_loadgen_nodes_LO(psm)
     # returns list of unique nodes that have an Sload or Sgen attribute - 1-indexed! 
@@ -84,7 +85,7 @@ function get_gen_idx(psm, nodes)
     return gen_idx_in_loadgens
 end
 
-function write_netload_onetime(psm, nodes, t_ind, Sload_all)
+function write_netload_onetime(psm, nodes, t_ind, Sload_all, ph_col)
     # input Sload is vector at the time index that is being modified
     for (ii,node) in enumerate(psm.Nodes[nodes])            # loop over all supplied nodes (in supplied order) - need plus one
         ct = 0                                              # count for if first load or not
@@ -106,6 +107,35 @@ function write_netload_onetime(psm, nodes, t_ind, Sload_all)
             end                                             # taking a load positive convention.. NEED TO LOOK AT THIS IF THERE ARE NODES W/ JUST GEN
         end
     end
+end
+
+
+function check_ip_solution(model::JuMP.Model)
+    status = JuMP.termination_status(model)
+    primal_status = JuMP.primal_status(model)
+
+    println("=== IP/NLP Solution Check ===")
+    println("Primal status: ", primal_status)
+    println("Termination status: ", status)
+
+    if primal_status == :NoSolution
+        println("No solution was found.")
+    end
+
+    # Handle all common termination statuses
+    if status == :OPTIMAL
+        println("Solution found: globally optimal.")
+    elseif status == :LOCALLY_SOLVED
+        println("Solution found: locally optimal (nonconvex problem).")
+    elseif status in [:INFEASIBLE, :INFEASIBLE_OR_UNBOUNDED]
+        println("Problem is infeasible or infeasible/unbounded.")
+    elseif status == :UNBOUNDED
+        println("Problem is unbounded.")
+    else
+        println("Solver returned other status: ", status)
+    end
+
+    println("=== End of Check ===")
 end
 
 end # end module

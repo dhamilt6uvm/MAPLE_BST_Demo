@@ -22,12 +22,10 @@ pyopen = pyimport("builtins").open
 pushfirst!(pyimport("sys")."path", "")
 pyimport("GLM_Tools")
 
-@pyimport matplotlib.gridspec as gridspec
-GridSpecFromSubplotSpec = gridspec.GridSpecFromSubplotSpec
 
 show_plot = true
 show_hists = false
-check_global_opt = true
+check_global_opt = false
 
 ## Load the feeder ######################################################
 substation_name = "Burton_Hill_small02"
@@ -155,7 +153,7 @@ end
 ## Optimization ###########################################################
 # set up
 sftmrg = 1e-3       # safety margin
-k0 = -1*ones(n_nodes,1)
+k0 = -10*ones(n_nodes,1)
 k0[notgen_idx_in_209] .= 0
 # determine if day or night, set generic vars
 ii = 1
@@ -187,6 +185,7 @@ set_start_value.(x_unit, 1 ./ sqrt(n_nodes))
 optimize!(model)
 
 kvals = value.(kinv)
+println(kvals[gen_idx_in_209])
 
 
 ## Evaluate steady state voltage ##########################################
