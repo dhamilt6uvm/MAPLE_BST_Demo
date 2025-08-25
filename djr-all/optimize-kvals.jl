@@ -23,7 +23,7 @@ pushfirst!(pyimport("sys")."path", "")
 pyimport("GLM_Tools")
 
 
-show_plot = true
+show_plot = false
 show_hists = false
 check_global_opt = false
 

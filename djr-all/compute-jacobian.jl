@@ -21,7 +21,7 @@ pyimport("GLM_Tools")
 # measure time taken
 start_time = time()
 
-save_new_jacobs = true         # change this to save results
+save_new_jacobs = false         # change this to save results
 ############################################################################################
 
 # phase?

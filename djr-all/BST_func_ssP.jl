@@ -11,7 +11,7 @@ using CSV
 using DataFrames
 
 ##### Function for running power flow ########
-function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
+function solve_pf_ssP(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linear_solver::String)
 
     n_nodes = length(psm.Nodes)
     n_branches = length(psm.Branches)
@@ -106,6 +106,6 @@ function solve_pf(psm::PyObject, V0_ref::Vector{ComplexF64}, t_ind::Int64, linea
         println("Solver did not find an optimal solution: $status")
     end
 
-    return value.(Vph)# value.(pb_rhs[:,1]-pb_lhs[:,1])
+    return value.(Vph), value.(pb_rhs[:,1]-pb_lhs[:,1])
 
 end
