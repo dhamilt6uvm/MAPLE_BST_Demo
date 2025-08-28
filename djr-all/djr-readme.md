@@ -38,3 +38,6 @@ Generally, reference the powerpoint notes from meeting on 8/20
 Goal was to repeat the figures from matlab with grouped bar chart: For the 10 hours of the year with the most voltage deviation, given my optimal design of slopes, how much better would voltage be? Need to get BST&VVC in loop for this. 
 
 What results I need to replicate will become more clear after writing the paper with MATLAB network and results
+
+#### To watch out for: 
+Based on MATLAB plotting, it seems that Dakota switched from GMT to EST in the process of going from ami to bst-loads. If I'm still using day_hours 13:24 or whatever but with BST loads then this is incorrect (need to confirm with Dakota that this switch from GMT to EST did happen and also confirm that I'm using those ranges to get my jacobians)... This probably won't fix everything, but it might help a little. 
