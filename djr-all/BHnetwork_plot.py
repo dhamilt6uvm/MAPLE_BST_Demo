@@ -34,9 +34,6 @@ def plot_feeder(substation_name):
     # Plot nodes
     for Node in pkl_model.Nodes:
         plt.plot(Node.X_coord, Node.Y_coord, '.', color=col_blue, markersize=3)
-    # Head node (first node in list, larger black dot)
-    head_node = pkl_model.Nodes[0]
-    plt.plot(head_node.X_coord, head_node.Y_coord, '^', color='black', markersize=6)
 
     # Plot loads
     for ld_ind, Load in enumerate(pkl_model.Loads):
@@ -47,6 +44,10 @@ def plot_feeder(substation_name):
     for gen_ind, Generator in enumerate(pkl_model.Generators):
         plt.plot(Generator.X_coord, Generator.Y_coord, 'o',
                  color=col_green, markersize=6, alpha=0.4)
+        
+    # Head node (first node in list, larger black dot)
+    head_node = pkl_model.Nodes[0]
+    plt.plot(head_node.X_coord, head_node.Y_coord, '^', color='black', markersize=6)
            
     # Custom legend handles
     node_handle      = mlines.Line2D([], [], color=col_blue, marker='.', linestyle='None', markersize=6, label='Nodes')
@@ -63,6 +64,6 @@ def plot_feeder(substation_name):
     plt.show()
 
 
-subsname = "Burton_Hill_small02"
+subsname = "Burton_Hill"
 
 plot_feeder(subsname)
