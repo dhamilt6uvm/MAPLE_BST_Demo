@@ -176,3 +176,6 @@ Feeder_Data/
 
 # Exclude feeder specific HELICS runner files
 *_cosim_runner.json
+
+# Julia Manifest
+Manifest.toml
