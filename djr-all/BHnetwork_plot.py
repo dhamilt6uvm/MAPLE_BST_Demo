@@ -8,7 +8,7 @@ sys.path.insert(0, parent_dir)  # Add the parent directory to the system path
 import GLM_Tools.PowerSystemModel as psm
 import pickle
 
-def plot_feeder(substation_name):
+def plot_feeder(substation_name, save_it):
 
     # Define nicer colors (RGB triplets)
     col_red  = (0.85, 0.33, 0.10)
@@ -20,6 +20,9 @@ def plot_feeder(substation_name):
     mpl.rcParams['mathtext.fontset'] = 'cm'   # Computer Modern
     mpl.rcParams['mathtext.rm'] = 'serif'     # use serif inside mathtext
 
+    # Create figure
+    fig, ax = plt.subplots(figsize=(8, 6))
+
     # Open pkl file
     pkl_file = f"Feeder_Data/{substation_name}/Python_Model/{substation_name}_Model.pkl"
     with open(pkl_file, 'rb') as file:
@@ -27,27 +30,27 @@ def plot_feeder(substation_name):
 
     # Plot branches (black thin lines)
     for Branch in pkl_model.Branches:
-        plt.plot([Branch.X_coord, Branch.X2_coord],
+        ax.plot([Branch.X_coord, Branch.X2_coord],
                 [Branch.Y_coord, Branch.Y2_coord],
                 color='black', linewidth=0.2)
 
     # Plot nodes
     for Node in pkl_model.Nodes:
-        plt.plot(Node.X_coord, Node.Y_coord, '.', color=col_blue, markersize=3)
+        ax.plot(Node.X_coord, Node.Y_coord, '.', color=col_blue, markersize=3)
 
     # Plot loads
     for ld_ind, Load in enumerate(pkl_model.Loads):
-        plt.plot(Load.X_coord, Load.Y_coord, 'o', color=col_red,
+        ax.plot(Load.X_coord, Load.Y_coord, 'o', color=col_red,
                 markersize=3)
 
     # Plot generators
     for gen_ind, Generator in enumerate(pkl_model.Generators):
-        plt.plot(Generator.X_coord, Generator.Y_coord, 'o',
+        ax.plot(Generator.X_coord, Generator.Y_coord, 'o',
                  color=col_green, markersize=6, alpha=0.4)
         
     # Head node (first node in list, larger black dot)
     head_node = pkl_model.Nodes[0]
-    plt.plot(head_node.X_coord, head_node.Y_coord, '^', color='black', markersize=6)
+    ax.plot(head_node.X_coord, head_node.Y_coord, '^', color='black', markersize=6)
            
     # Custom legend handles
     node_handle      = mlines.Line2D([], [], color=col_blue, marker='.', linestyle='None', markersize=6, label='Nodes')
@@ -58,12 +61,15 @@ def plot_feeder(substation_name):
     plt.legend(handles=[node_handle, load_handle, gen_handle, head_handle], loc='best')
 
     # remove axes
-    plt.axis("off")
+    ax.set_axis_off()
 
     # Show figure
-    plt.show()
+    fig.canvas.draw()
+
+    if save_it:
+        fig.savefig(f"{substation_name}_feeder_plot.svg", bbox_inches='tight', pad_inches=0)
 
 
-subsname = "Burton_Hill"
+subsname = "Burton_Hill_small02"
 
-plot_feeder(subsname)
+plot_feeder(subsname, save_it=True)
