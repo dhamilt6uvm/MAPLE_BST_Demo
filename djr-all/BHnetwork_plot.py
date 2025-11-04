@@ -21,7 +21,7 @@ def plot_feeder(substation_name, save_it):
     mpl.rcParams['mathtext.rm'] = 'serif'     # use serif inside mathtext
 
     # Create figure
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(4, 3.5))
 
     # Open pkl file
     pkl_file = f"Feeder_Data/{substation_name}/Python_Model/{substation_name}_Model.pkl"
@@ -46,7 +46,7 @@ def plot_feeder(substation_name, save_it):
     # Plot generators
     for gen_ind, Generator in enumerate(pkl_model.Generators):
         ax.plot(Generator.X_coord, Generator.Y_coord, 'o',
-                 color=col_green, markersize=6, alpha=0.4)
+                 color=col_green, markersize=6, alpha=0.4, markeredgecolor="none")
         
     # Head node (first node in list, larger black dot)
     head_node = pkl_model.Nodes[0]
@@ -55,7 +55,7 @@ def plot_feeder(substation_name, save_it):
     # Custom legend handles
     node_handle      = mlines.Line2D([], [], color=col_blue, marker='.', linestyle='None', markersize=6, label='Nodes')
     load_handle      = mlines.Line2D([], [], color=col_red, marker='o', linestyle='None', markersize=8, label='Loads')
-    gen_handle       = mlines.Line2D([], [], color=col_green, marker='o', linestyle='None', markersize=8, alpha=0.4, label='Generators')
+    gen_handle       = mlines.Line2D([], [], color=col_green, marker='o', linestyle='None', markersize=8, alpha=0.4, markeredgecolor="none", label='Generators')
     head_handle      = mlines.Line2D([], [], color='black', marker='^', linestyle='None', markersize=8, label='Head Node')
 
     plt.legend(handles=[node_handle, load_handle, gen_handle, head_handle], loc='best')
@@ -65,11 +65,13 @@ def plot_feeder(substation_name, save_it):
 
     # Show figure
     fig.canvas.draw()
+    plt.show()
 
     if save_it:
         fig.savefig(f"{substation_name}_feeder_plot.svg", bbox_inches='tight', pad_inches=0)
 
 
-subsname = "Burton_Hill_small02"
+# subsname = "Burton_Hill_small02"
+subsname = "Burton_Hill_ESE"
 
-plot_feeder(subsname, save_it=True)
+plot_feeder(subsname, save_it=False)
