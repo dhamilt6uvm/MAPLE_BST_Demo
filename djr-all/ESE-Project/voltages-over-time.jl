@@ -27,6 +27,7 @@ function save_data(A, name)
     CSV.write("$name.csv", df)
 end
 
+
 # Import Python modules
 pickle = pyimport("pickle")
 pyopen = pyimport("builtins").open
@@ -64,3 +65,9 @@ end
 
 ## Save the voltage data ###################################################################
 save_data(V_nodes, "V_allAMI_BH_ESE")            # voltage at all nodes at all AMI loading conditions
+
+
+
+## Questions for Katy
+# does it make sense to add the power the way that I am doing it?
+# 
