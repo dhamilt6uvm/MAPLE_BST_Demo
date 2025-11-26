@@ -28,29 +28,33 @@ def plot_feeder(substation_name, save_it):
     with open(pkl_file, 'rb') as file:
         pkl_model = pickle.load(file)
 
+    # dynamic scaling of components     # THIS NEEDS HELP/fine tuning for larger networks
+    n_nodes = len(pkl_model.Nodes)
+    scale = max(min(1000 / n_nodes,3),0.1)    
+
     # Plot branches (black thin lines)
     for Branch in pkl_model.Branches:
         ax.plot([Branch.X_coord, Branch.X2_coord],
                 [Branch.Y_coord, Branch.Y2_coord],
-                color='black', linewidth=0.2)
+                color='black', linewidth=0.2*scale)
 
     # Plot nodes
     for Node in pkl_model.Nodes:
-        ax.plot(Node.X_coord, Node.Y_coord, '.', color=col_blue, markersize=3)
+        ax.plot(Node.X_coord, Node.Y_coord, '.', color=col_blue, markersize=3*scale)
 
     # Plot loads
     for ld_ind, Load in enumerate(pkl_model.Loads):
         ax.plot(Load.X_coord, Load.Y_coord, 'o', color=col_red,
-                markersize=3)
+                markersize=3*scale)
 
     # Plot generators
     for gen_ind, Generator in enumerate(pkl_model.Generators):
         ax.plot(Generator.X_coord, Generator.Y_coord, 'o',
-                 color=col_green, markersize=6, alpha=0.4, markeredgecolor="none")
+                 color=col_green, markersize=6*scale, alpha=0.4, markeredgecolor="none")
         
     # Head node (first node in list, larger black dot)
     head_node = pkl_model.Nodes[0]
-    ax.plot(head_node.X_coord, head_node.Y_coord, '^', color='black', markersize=6)
+    ax.plot(head_node.X_coord, head_node.Y_coord, '^', color='black', markersize=6*scale)
            
     # Custom legend handles
     node_handle      = mlines.Line2D([], [], color=col_blue, marker='.', linestyle='None', markersize=6, label='Nodes')
@@ -73,5 +77,6 @@ def plot_feeder(substation_name, save_it):
 
 # subsname = "Burton_Hill_small02"
 subsname = "Burton_Hill_ESE"
+# subsname = "Burton_Hill"
 
-plot_feeder(subsname, save_it=False)
+plot_feeder(subsname, save_it=True)

@@ -50,7 +50,7 @@ psm = pickle.load(pkl_file)
 pkl_file.close()
 
 
-## Solve power-flow with BST ##############################################################
+## Solve power-flow with BST ##############################################################plot_
 nnodes = length(psm.Nodes)
 ntest = size(psm.Loads[1].Sload,1)
 V_nodes = zeros(Float64, ntest, nnodes)
@@ -71,3 +71,11 @@ save_data(V_nodes, "V_allAMI_BH_ESE")            # voltage at all nodes at all A
 ## Questions for Katy
 # does it make sense to add the power the way that I am doing it?
 # 
+
+#### 
+# what am I trying to do: 
+# modfiy the load data and resimulate
+
+# get the values into a table maybe
+
+# need to make interpolated load profile data to simulate voltage with altered loads. May want to filter the load. 
